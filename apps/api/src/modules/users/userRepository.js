@@ -1,12 +1,20 @@
-const { User } = require("./userModel");
+// src/modules/users/userRepository.js (ESM)
 
-function findByEmail(email) {
-  return User.findOne({ email });
+import { User } from "#modules/users/userModel.js";
+
+export function normalizeEmail(email = "") {
+  return String(email).trim().toLowerCase();
 }
-function createUser(data) {
-  return User.create(data);
+
+export function findByEmail(email) {
+  return User.findOne({ email: normalizeEmail(email) });
 }
-function assignRoles(userId, roles) {
+
+export function createUser(data) {
+  const doc = { ...data, email: normalizeEmail(data.email) };
+  return User.create(doc);
+}
+
+export function assignRoles(userId, roles) {
   return User.updateOne({ _id: userId }, { $set: { roles } });
 }
-module.exports = { findByEmail, createUser, assignRoles };

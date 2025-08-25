@@ -1,3 +1,4 @@
+// apps/web/src/store/slices/authSlice.js
 import { createSlice } from "@reduxjs/toolkit";
 import {
   clearAuth as clearStore,
@@ -7,11 +8,7 @@ import {
 
 const persisted = loadAuth();
 
-const initial = persisted || {
-  token: null,
-  user: null,
-  branchId: null,
-};
+const initial = persisted || { token: null, user: null, branchId: null };
 
 const slice = createSlice({
   name: "auth",

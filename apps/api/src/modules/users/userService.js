@@ -1,23 +1,75 @@
-const jwt = require("jsonwebtoken");
-const { hashPassword, verifyPassword } = require("utils/crypto");
-const { findByEmail, createUser } = require("./userRepository");
+// src/modules/users/userService.js (ESM)
+// Auth service: register() + login()
 
-async function register({ email, name, password, roles = [], branches = [] }) {
+import jwt from "jsonwebtoken";
+import { z } from "zod";
+import { hashPassword, verifyPassword } from "#utils/crypto.js";
+import {
+  findByEmail,
+  createUser,
+  normalizeEmail,
+} from "#modules/users/userRepository.js";
+
+const emailSchema = z
+  .string({ required_error: "Email is required" })
+  .email("Email format is invalid"); // catches "no @"
+const passwordSchema = z
+  .string({ required_error: "Password is required" })
+  .min(6, "Password must be at least 6 characters");
+
+const registerSchema = z.object({
+  email: emailSchema,
+  name: z.string().optional(),
+  password: passwordSchema,
+  roles: z.array(z.string()).optional(),
+  branches: z.array(z.string()).optional(),
+});
+
+const loginSchema = z.object({
+  email: emailSchema,
+  password: z.string({ required_error: "Password is required" }),
+});
+
+export async function register(input) {
+  const {
+    email,
+    name,
+    password,
+    roles = [],
+    branches = [],
+  } = registerSchema.parse(input);
+
   const exists = await findByEmail(email);
-  if (exists)
+  if (exists) {
     throw Object.assign(new Error("Email already registered"), { status: 400 });
+  }
+
   const passwordHash = await hashPassword(password);
-  const user = await createUser({ email, name, passwordHash, roles, branches });
+
+  const user = await createUser({
+    email: normalizeEmail(email),
+    name,
+    passwordHash,
+    roles,
+    branches,
+  });
+
   return toAuthToken(user);
 }
 
-async function login({ email, password }) {
+export async function login(input) {
+  const { email, password } = loginSchema.parse(input);
+
   const user = await findByEmail(email);
-  if (!user)
+  if (!user) {
     throw Object.assign(new Error("Invalid credentials"), { status: 401 });
+  }
+
   const ok = await verifyPassword(password, user.passwordHash || "");
-  if (!ok)
+  if (!ok) {
     throw Object.assign(new Error("Invalid credentials"), { status: 401 });
+  }
+
   return toAuthToken(user);
 }
 
@@ -28,9 +80,15 @@ function toAuthToken(user) {
     roles: user.roles || [],
     branches: user.branches || [],
   };
-  const accessToken = jwt.sign(payload, process.env.API_JWT_SECRET, {
-    expiresIn: "12h",
-  });
+
+  const secret = process.env.API_JWT_SECRET;
+  if (!secret) {
+    throw Object.assign(new Error("API_JWT_SECRET is not configured"), {
+      status: 500,
+    });
+  }
+
+  const accessToken = jwt.sign(payload, secret, { expiresIn: "12h" });
   return {
     accessToken,
     user: {
@@ -41,5 +99,3 @@ function toAuthToken(user) {
     },
   };
 }
-
-module.exports = { register, login };

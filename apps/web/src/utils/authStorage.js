@@ -1,11 +1,11 @@
-const KEY = "auth";
+// apps/web/src/utils/authStorage.js
+const KEY = "auth:v1";
 
-export function saveAuth(state) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-  } catch {}
-}
+const canUseStorage =
+  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
 export function loadAuth() {
+  if (!canUseStorage) return null;
   try {
     const raw = localStorage.getItem(KEY);
     return raw ? JSON.parse(raw) : null;
@@ -13,8 +13,21 @@ export function loadAuth() {
     return null;
   }
 }
+
+export function saveAuth(data) {
+  if (!canUseStorage) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(data));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearAuth() {
+  if (!canUseStorage) return;
   try {
     localStorage.removeItem(KEY);
-  } catch {}
+  } catch {
+    /* ignore */
+  }
 }

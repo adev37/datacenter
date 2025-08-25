@@ -1,18 +1,24 @@
-import React from "react";
-import { useSelector } from "react-redux";
-import { useMeQuery } from "@/services/auth.api";
+import { useEffect, useState } from "react";
+import { useDispatch } from "react-redux";
+import { loadAuth } from "@/utils/authStorage";
+import { setAuth, setBranch } from "@/store/slices/authSlice";
 
-/** Rehydrates /auth/me when a token exists, shows loader while fetching */
+/**
+ * Hydrates Redux from localStorage before we render any protected routes.
+ */
 export default function AuthGate({ children }) {
-  const token = useSelector((s) => s.auth?.token);
-  const { isFetching } = useMeQuery(undefined, { skip: !token });
+  const [ready, setReady] = useState(false);
+  const dispatch = useDispatch();
 
-  if (token && isFetching) {
-    return (
-      <div className="w-full min-h-screen grid place-items-center text-gray-600">
-        Loading session…
-      </div>
-    );
-  }
+  useEffect(() => {
+    const persisted = loadAuth();
+    if (persisted) {
+      dispatch(setAuth({ token: persisted.token, user: persisted.user }));
+      if (persisted.branchId) dispatch(setBranch(persisted.branchId));
+    }
+    setReady(true);
+  }, [dispatch]);
+
+  if (!ready) return <div className="p-6">Loading…</div>;
   return children;
 }

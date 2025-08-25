@@ -1,4 +1,6 @@
-function auditHook(req, _res, next) {
+// src/middlewares/auditHook.js (ESM)
+
+export function auditHook(req, _res, next) {
   req.audit = {
     at: new Date().toISOString(),
     ip: req.ip,
@@ -6,4 +8,3 @@ function auditHook(req, _res, next) {
   };
   next();
 }
-module.exports = { auditHook };

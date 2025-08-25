@@ -1,13 +1,17 @@
-const mongoose = require("mongoose");
+// src/db/connection.js (ESM)
+
+import mongoose from "mongoose";
 
 let isConnected = false;
 
-async function connectMongo(uri) {
+export async function connectMongo(uri) {
   const mongoUri =
     uri || process.env.MONGO_URI || "mongodb://localhost:27017/datacenter";
+
   if (isConnected) return mongoose.connection;
 
   mongoose.set("strictQuery", true);
+
   await mongoose.connect(mongoUri, {
     autoIndex: process.env.NODE_ENV !== "production",
     serverSelectionTimeoutMS: 10000,
@@ -28,12 +32,10 @@ async function connectMongo(uri) {
   return mongoose.connection;
 }
 
-async function disconnectMongo() {
+export async function disconnectMongo() {
   if (isConnected) {
     await mongoose.connection.close();
     isConnected = false;
     console.log("[mongo] connection closed");
   }
 }
-
-module.exports = { connectMongo, disconnectMongo };

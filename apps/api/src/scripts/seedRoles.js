@@ -1,16 +1,29 @@
-require("module-alias/register");
-require("dotenv").config();
-const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-const { Role } = require("modules/roles/roleModel");
-const { PERMS } = require("modules/roles/permissions");
-const { User } = require("modules/users/userModel");
+// src/scripts/seedRoles.js
+import "dotenv/config";
+import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+
+import { Role } from "#modules/roles/roleModel.js";
+import { PERMS } from "#modules/roles/permissions.js";
+import { User } from "#modules/users/userModel.js";
 
 async function main() {
-  await mongoose.connect(
-    process.env.MONGO_URI || "mongodb://localhost:27017/datacenter"
-  );
+  const mongoUri =
+    process.env.MONGO_URI || "mongodb://localhost:27017/datacenter";
+  const resetSuper = String(process.env.SEED_RESET_SUPER || "").trim() === "1";
 
+  console.log("[seed] Connecting:", mongoUri);
+  await mongoose.connect(mongoUri, {
+    autoIndex: process.env.NODE_ENV !== "production",
+  });
+
+  // Helpful in dev; won’t error if already present
+  await Promise.allSettled([
+    Role.collection.createIndex({ name: 1 }, { unique: true }),
+    User.collection.createIndex({ email: 1 }, { unique: true }),
+  ]);
+
+  // ---------- Roles ----------
   const ROLE = {
     SUPER_ADMIN: { scope: "GLOBAL", permissions: Object.values(PERMS) },
     ADMIN: {
@@ -123,31 +136,67 @@ async function main() {
     },
   };
 
-  for (const [name, { scope, permissions }] of Object.entries(ROLE)) {
-    await Role.updateOne(
-      { name },
-      { $set: { name, scope, permissions } },
-      { upsert: true }
-    );
-  }
+  // Upsert all roles in a single bulk
+  const roleOps = Object.entries(ROLE).map(
+    ([name, { scope, permissions }]) => ({
+      updateOne: {
+        filter: { name },
+        update: { $set: { name, scope, permissions } },
+        upsert: true,
+      },
+    })
+  );
+  await Role.bulkWrite(roleOps);
+  console.log("[seed] Roles upserted:", Object.keys(ROLE).length);
 
+  // ---------- Super Admin ----------
   const email = "super@admin.local";
-  const exists = await User.findOne({ email });
-  if (!exists) {
-    const passwordHash = await bcrypt.hash("ChangeMe123!", 10);
-    await User.create({
+  const defaultPassword = "ChangeMe123!";
+
+  let superAdmin = await User.findOne({ email });
+
+  if (!superAdmin) {
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    superAdmin = await User.create({
       email,
       name: "Super Admin",
       passwordHash,
       roles: ["SUPER_ADMIN"],
       branches: [],
     });
+    console.log(`✅ Super Admin created: ${email} / ${defaultPassword}`);
+  } else {
+    // Ensure role is present
+    if (
+      !Array.isArray(superAdmin.roles) ||
+      !superAdmin.roles.includes("SUPER_ADMIN")
+    ) {
+      await User.updateOne(
+        { _id: superAdmin._id },
+        { $addToSet: { roles: "SUPER_ADMIN" } }
+      );
+      console.log("ℹ️ Ensured SUPER_ADMIN role on existing user.");
+    }
+    // Optional password reset
+    if (resetSuper) {
+      const passwordHash = await bcrypt.hash(defaultPassword, 10);
+      await User.updateOne({ _id: superAdmin._id }, { $set: { passwordHash } });
+      console.log(
+        `🔁 Super Admin password reset to default: ${defaultPassword}`
+      );
+    } else {
+      console.log("ℹ️ Super Admin already exists; password unchanged.");
+    }
   }
 
-  console.log("✅ Seeded roles + super admin:", email, "/ ChangeMe123!");
-  process.exit(0);
+  await mongoose.disconnect();
+  console.log("✅ Seed complete.");
 }
-main().catch((e) => {
-  console.error(e);
+
+main().catch(async (e) => {
+  console.error("❌ Seed error:", e);
+  try {
+    await mongoose.disconnect();
+  } catch {}
   process.exit(1);
 });

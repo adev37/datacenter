@@ -1,11 +1,7 @@
 import React, { useState } from "react";
 import { useRegisterMutation } from "@/services/auth.api";
-import { useDispatch } from "react-redux";
-import { setAuth } from "@/store/slices/authSlice";
 import { useNavigate, Link } from "react-router-dom";
 
-// Minimal role options for MVP.
-// TIP: In real app, drive this from GET /roles.
 const ROLE_OPTIONS = [
   "ADMIN",
   "DOCTOR",
@@ -21,31 +17,54 @@ const ROLE_OPTIONS = [
   "IT",
 ];
 
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Register() {
   const [name, setName] = useState("Branch Admin");
   const [email, setEmail] = useState("admin@branch.local");
   const [password, setPassword] = useState("ChangeMe123!");
   const [role, setRole] = useState("ADMIN");
-  const [branchId, setBranchId] = useState(""); // optional
+  const [branchId, setBranchId] = useState("");
+  const [clientErr, setClientErr] = useState("");
   const [registerUser, { isLoading, error }] = useRegisterMutation();
-  const dispatch = useDispatch();
   const nav = useNavigate();
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    setClientErr("");
+
+    // Client-side validation to mirror backend Zod
+    if (!name || !name.trim()) {
+      setClientErr("Name is required");
+      return;
+    }
+    if (!emailRegex.test(String(email).trim().toLowerCase())) {
+      setClientErr("Email format is invalid");
+      return;
+    }
+    if (!password || password.length < 8) {
+      setClientErr("Password must be at least 8 characters");
+      return;
+    }
+
     const body = {
       name,
       email,
       password,
       roles: [role],
-      // If left blank, server will accept [].
       branches: branchId ? [branchId] : [],
     };
-    const res = await registerUser(body).unwrap();
-    // server returns { accessToken, user }
-    dispatch(setAuth(res));
-    nav("/dashboard");
+
+    try {
+      await registerUser(body).unwrap();
+      // Send the user to login with a banner and the email prefilled
+      nav("/login", { replace: true, state: { registered: true, email } });
+    } catch {
+      // RTKQ supplies `error` for display below
+    }
   };
+
+  const serverMsg = error?.data?.message;
 
   return (
     <div className="min-h-screen grid place-items-center">
@@ -65,9 +84,11 @@ export default function Register() {
         <label className="text-sm">Email</label>
         <input
           className="border p-2 mb-3 w-full"
+          type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="email@example.com"
+          autoComplete="email"
         />
 
         <label className="text-sm">Password</label>
@@ -77,6 +98,7 @@ export default function Register() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
+          autoComplete="new-password"
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -93,7 +115,6 @@ export default function Register() {
               ))}
             </select>
           </div>
-
           <div>
             <label className="text-sm">Branch ID (optional)</label>
             <input
@@ -105,17 +126,14 @@ export default function Register() {
           </div>
         </div>
 
+        {clientErr && <p className="text-red-600 text-sm mt-2">{clientErr}</p>}
+        {serverMsg && <p className="text-red-600 text-sm mt-2">{serverMsg}</p>}
+
         <button
           disabled={isLoading}
           className="mt-4 bg-green-600 text-white px-4 py-2 rounded w-full">
           {isLoading ? "Creating…" : "Register"}
         </button>
-
-        {error && (
-          <p className="text-red-600 text-sm mt-2">
-            {error.data?.message || "Registration failed"}
-          </p>
-        )}
 
         <p className="text-sm text-gray-600 mt-3">
           Already have an account?{" "}

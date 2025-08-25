@@ -1,6 +1,15 @@
-const { register, login } = require("./userService");
+// src/modules/users/userController.js (ESM)
 
-async function handleRegister(req, res, next) {
+import { register, login } from "#modules/users/userService.js";
+
+// ------------------------------------------------------------
+// Controller functions for User authentication
+// ------------------------------------------------------------
+// - handleRegister: Creates a new user with hashed password
+// - handleLogin: Authenticates a user and issues a JWT
+// ------------------------------------------------------------
+
+export async function handleRegister(req, res, next) {
   try {
     const out = await register(req.body);
     res.status(201).json(out);
@@ -8,7 +17,8 @@ async function handleRegister(req, res, next) {
     next(e);
   }
 }
-async function handleLogin(req, res, next) {
+
+export async function handleLogin(req, res, next) {
   try {
     const out = await login(req.body);
     res.json(out);
@@ -16,5 +26,3 @@ async function handleLogin(req, res, next) {
     next(e);
   }
 }
-
-module.exports = { handleRegister, handleLogin };

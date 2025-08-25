@@ -1,8 +1,12 @@
-const { Role } = require("./roleModel");
-async function listRoles() {
+// src/modules/roles/roleService.js (ESM)
+
+import { Role } from "#modules/roles/roleModel.js";
+
+export async function listRoles() {
   return Role.find({}).lean();
 }
-async function upsertRole({ name, scope, permissions }) {
+
+export async function upsertRole({ name, scope, permissions }) {
   await Role.updateOne(
     { name },
     { $set: { name, scope, permissions } },
@@ -10,4 +14,3 @@ async function upsertRole({ name, scope, permissions }) {
   );
   return Role.findOne({ name }).lean();
 }
-module.exports = { listRoles, upsertRole };

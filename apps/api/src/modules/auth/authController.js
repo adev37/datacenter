@@ -1,16 +1,32 @@
-const { login, register } = require("./authService");
-async function postLogin(req, res, next) {
+// src/modules/auth/authController.js (ESM)
+
+import { ZodError } from "zod";
+import { login, register } from "#modules/auth/authService.js";
+
+export async function postLogin(req, res, next) {
   try {
-    res.json(await login(req.body));
+    const result = await login(req.body);
+    res.json(result);
   } catch (e) {
+    if (e instanceof ZodError) {
+      return res
+        .status(400)
+        .json({ message: e.errors[0]?.message || "Bad request" });
+    }
     next(e);
   }
 }
-async function postRegister(req, res, next) {
+
+export async function postRegister(req, res, next) {
   try {
-    res.status(201).json(await register(req.body));
+    const result = await register(req.body);
+    res.status(201).json(result);
   } catch (e) {
+    if (e instanceof ZodError) {
+      return res
+        .status(400)
+        .json({ message: e.errors[0]?.message || "Bad request" });
+    }
     next(e);
   }
 }
-module.exports = { postLogin, postRegister };
