@@ -1,27 +1,28 @@
+// src/middlewares/validate.js
+import { ZodError } from "zod";
+
 export const validate = (schema) => (req, _res, next) => {
-  const parsed = schema.safeParse({
-    body: req.body,
-    query: req.query,
-    params: req.params,
-  });
-
-  if (!parsed.success) {
-    const issue = parsed.error.issues?.[0];
-    const msg = issue?.message || "Validation failed";
-    return next(Object.assign(new Error(msg), { status: 400 }));
+  try {
+    // Support composite schemas: { query?, params?, body? }
+    // or bare schemas for body-only.
+    if (schema?.shape?.query || schema?.shape?.params || schema?.shape?.body) {
+      const out = schema.parse({
+        query: req.query,
+        params: req.params,
+        body: req.body,
+      });
+      if (out.query) req.query = out.query;
+      if (out.params) req.params = out.params;
+      if (out.body) req.body = out.body;
+    } else {
+      req.body = schema.parse(req.body);
+    }
+    next();
+  } catch (e) {
+    if (e instanceof ZodError) {
+      const msg = e.issues?.[0]?.message || "Invalid request";
+      return next(Object.assign(new Error(msg), { status: 400 }));
+    }
+    next(e);
   }
-
-  const { body, query, params } = parsed.data;
-  if (body) req.body = body;
-  if (query) req.query = query;
-  if (params) req.params = params;
-  next();
 };
-
-// Optional helpers if you ever want them:
-export const validateBody = (schema) =>
-  validate({ safeParse: (i) => schema.safeParse({ body: i.body }) });
-export const validateQuery = (schema) =>
-  validate({ safeParse: (i) => schema.safeParse({ query: i.query }) });
-export const validateParams = (schema) =>
-  validate({ safeParse: (i) => schema.safeParse({ params: i.params }) });

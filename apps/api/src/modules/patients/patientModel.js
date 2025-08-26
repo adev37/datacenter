@@ -60,6 +60,7 @@ const PatientSchema = new Schema(
 
 // Sort-heavy views by branch + time
 PatientSchema.index({ branchId: 1, createdAt: -1 });
+PatientSchema.index({ "name.full": 1 });
 
 // Auto-build full name if not provided
 PatientSchema.pre("save", function (next) {

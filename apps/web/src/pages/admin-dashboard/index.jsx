@@ -1,29 +1,45 @@
+// apps/web/src/pages/admin-dashboard/index.jsx
 import React from "react";
-import { useDispatch } from "react-redux";
-import { signOut } from "@/store/slices/authSlice";
-import { useNavigate } from "react-router-dom";
+import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
+import DashboardStats from "./components/DashboardStats";
+import ContentOverview from "./components/ContentOverview";
+import RecentActivity from "./components/RecentActivity";
+import QuickActions from "./components/QuickActions";
+import SystemStatus from "./components/SystemStatus";
+import PendingTasks from "./components/PendingTasks";
 
-export default function Dashboard() {
-  const dispatch = useDispatch();
-  const nav = useNavigate();
-  const logout = () => {
-    dispatch(signOut());
-    nav("/login");
-  };
-
+export default function AdminDashboard() {
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <button
-          onClick={logout}
-          className="px-3 py-1 rounded bg-gray-800 text-white">
-          Logout
-        </button>
+    <>
+      <div className="mb-4">
+        <NavigationBreadcrumb />
       </div>
-      <p className="text-gray-600 mt-2">
-        You are logged in. Start building modules.
-      </p>
-    </div>
+
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-gray-600">
+          Welcome back! Here’s what’s happening today.
+        </p>
+      </header>
+
+      <DashboardStats />
+
+      <div className="grid gap-4 grid-cols-1 xl:grid-cols-3 mt-6">
+        <div className="xl:col-span-2 space-y-4">
+          <ContentOverview />
+        </div>
+        <div className="space-y-4">
+          <RecentActivity />
+          <SystemStatus />
+        </div>
+      </div>
+
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-3 mt-6">
+        <div className="lg:col-span-2">
+          <QuickActions />
+        </div>
+        <PendingTasks />
+      </div>
+    </>
   );
 }

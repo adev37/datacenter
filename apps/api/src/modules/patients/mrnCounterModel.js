@@ -1,3 +1,4 @@
+// src/modules/patients/mrnCounterModel.js
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
@@ -11,7 +12,7 @@ const MRNCounterSchema = new Schema(
     },
     seq: { type: Number, default: 0 },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "mrn_counters" }
 );
 
 MRNCounterSchema.index({ branchId: 1 }, { unique: true });

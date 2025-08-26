@@ -1,4 +1,5 @@
-import { useState } from "react";
+// apps/web/src/pages/patients/PatientsList.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { skipToken } from "@reduxjs/toolkit/query";
@@ -8,13 +9,29 @@ import { useSearchPatientsQuery } from "@/services/patients.api";
 export default function PatientsList() {
   const canCreate = useHasPerm("patient.write");
   const branchId = useSelector((s) => s.auth?.branchId);
+
+  // rawQ is what the user types; q is the debounced/trimmed value we query with
+  const [rawQ, setRawQ] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
 
-  // Do not hit /patients/search until we have a branch context
-  const queryArg = branchId ? { q, page, limit: 20 } : skipToken;
+  // debounce search input (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setQ(rawQ.trim()), 300);
+    return () => clearTimeout(t);
+  }, [rawQ]);
+
+  // backend requires one of q|mrn|phone|dob; we only send q when non-empty
+  const hasTerm = Boolean(q);
+
+  const queryArg = useMemo(() => {
+    if (!branchId || !hasTerm) return skipToken;
+    return { q, page, limit: 20 };
+  }, [branchId, hasTerm, q, page]);
+
   const { data, isFetching } = useSearchPatientsQuery(queryArg);
 
+  // branch not chosen yet
   if (!branchId) {
     return (
       <div className="p-4">
@@ -25,6 +42,12 @@ export default function PatientsList() {
       </div>
     );
   }
+
+  const totalPages = useMemo(() => {
+    if (!data) return 1;
+    const perPage = data.limit || 20;
+    return Math.max(1, Math.ceil((data.total || 0) / perPage));
+  }, [data]);
 
   return (
     <div className="p-4 space-y-3">
@@ -43,17 +66,17 @@ export default function PatientsList() {
         <input
           className="border rounded px-3 py-2 w-full"
           placeholder="Search by name, MRN, phone…"
-          value={q}
+          value={rawQ}
           onChange={(e) => {
-            setQ(e.target.value);
+            setRawQ(e.target.value);
             setPage(1);
           }}
         />
       </div>
 
-      {isFetching && <div>Loading…</div>}
+      {isFetching && hasTerm && <div>Loading…</div>}
 
-      {!isFetching && (
+      {!isFetching && hasTerm && (
         <div className="overflow-auto border rounded">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -95,24 +118,32 @@ export default function PatientsList() {
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
-          disabled={page <= 1}
-          onClick={() => setPage((p) => p - 1)}>
-          Prev
-        </button>
-        <span className="text-sm">
-          Page {data?.page || page} /{" "}
-          {Math.max(1, Math.ceil((data?.total || 0) / (data?.limit || 20)))}
-        </span>
-        <button
-          className="px-3 py-1 border rounded disabled:opacity-50"
-          disabled={!data?.hasMore}
-          onClick={() => setPage((p) => p + 1)}>
-          Next
-        </button>
-      </div>
+      {!isFetching && !hasTerm && (
+        <div className="rounded border p-3 bg-gray-50 text-sm text-gray-600">
+          Type a name, MRN, phone, or DOB to search.
+        </div>
+      )}
+
+      {/* Pagination */}
+      {hasTerm && (
+        <div className="flex items-center justify-end gap-2">
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}>
+            Prev
+          </button>
+          <span className="text-sm">
+            Page {data?.page || page} / {totalPages}
+          </span>
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            disabled={!data?.hasMore}
+            onClick={() => setPage((p) => p + 1)}>
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

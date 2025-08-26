@@ -1,3 +1,4 @@
+// src/modules/patients/patientController.js
 import * as service from "./patientService.js";
 import { asyncHandler } from "#utils/asyncHandler.js";
 
@@ -40,9 +41,8 @@ export const update = asyncHandler(async (req, res) => {
   res.json(patient);
 });
 
-// POST /patients/:id/documents  (stub: integrate storage later)
+// POST /patients/:id/documents (placeholder -> integrate storage later)
 export const uploadDoc = asyncHandler(async (_req, res) => {
-  // Integrate with modules/documents/storageService.js for signed URLs if needed.
-  // For now, return a placeholder contract:
+  // Hand off to modules/documents/storageService.js when ready
   res.status(201).json({ ok: true });
 });

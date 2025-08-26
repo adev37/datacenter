@@ -1,6 +1,8 @@
+// src/modules/patients/patientRoutes.js
 import { Router } from "express";
-import { rbac } from "#middlewares/rbac.js";
-import { validate } from "#middlewares/validate.js"; // your wrapper
+import { requireAuth } from "#middlewares/requireAuth.js";
+import { permit } from "#middlewares/rbac.js";
+import { validate } from "#middlewares/validate.js";
 import * as ctrl from "./patientController.js";
 import {
   createPatientSchema,
@@ -10,16 +12,19 @@ import {
 
 const router = Router();
 
+// All patient endpoints need auth
+router.use(requireAuth);
+
 // Search/list
 router.get(
   "/",
-  rbac("patient.read"),
+  permit("patient.read"),
   validate(searchPatientsSchema),
   ctrl.search
 );
 router.get(
   "/search",
-  rbac("patient.read"),
+  permit("patient.read"),
   validate(searchPatientsSchema),
   ctrl.search
 );
@@ -27,19 +32,19 @@ router.get(
 // CRUD
 router.post(
   "/",
-  rbac("patient.write"),
+  permit("patient.write"),
   validate(createPatientSchema),
   ctrl.create
 );
-router.get("/:id", rbac("patient.read"), ctrl.getById);
+router.get("/:id", permit("patient.read"), ctrl.getById);
 router.patch(
   "/:id",
-  rbac("patient.write"),
+  permit("patient.write"),
   validate(updatePatientSchema),
   ctrl.update
 );
 
-// Documents (optional v1)
-router.post("/:id/documents", rbac("patient.write"), ctrl.uploadDoc);
+// Docs (stub ok)
+router.post("/:id/documents", permit("patient.write"), ctrl.uploadDoc);
 
 export default router;
