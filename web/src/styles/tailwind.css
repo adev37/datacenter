@@ -1,0 +1,111 @@
+/* apps/web/src/styles/tailwind.css */
+
+/* Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap");
+
+/* Tailwind layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Theme tokens (light) ---- */
+@layer base {
+  :root {
+    /* Core Colors */
+    --color-background: #f8fafc; /* slate-50 */
+    --color-foreground: #1e293b; /* slate-800 */
+    --color-border: #e2e8f0; /* slate-200 */
+    --color-input: #ffffff; /* white */
+    --color-ring: #2563eb; /* blue-600 */
+
+    /* Card Colors */
+    --color-card: #ffffff; /* white */
+    --color-card-foreground: #1e293b; /* slate-800 */
+
+    /* Popover Colors */
+    --color-popover: #ffffff; /* white */
+    --color-popover-foreground: #1e293b; /* slate-800 */
+
+    /* Muted Colors */
+    --color-muted: #f1f5f9; /* slate-100 */
+    --color-muted-foreground: #64748b; /* slate-500 */
+
+    /* Primary Colors */
+    --color-primary: #2563eb; /* blue-600 */
+    --color-primary-foreground: #ffffff;
+
+    /* Secondary Colors */
+    --color-secondary: #64748b; /* slate-500 */
+    --color-secondary-foreground: #ffffff;
+
+    /* Accent Colors */
+    --color-accent: #059669; /* emerald-600 */
+    --color-accent-foreground: #ffffff;
+
+    /* Status Colors */
+    --color-success: #16a34a; /* green-600 */
+    --color-success-foreground: #ffffff;
+
+    --color-warning: #d97706; /* amber-600 */
+    --color-warning-foreground: #ffffff;
+
+    --color-error: #dc2626; /* red-600 */
+    --color-error-foreground: #ffffff;
+
+    --color-destructive: #dc2626; /* red-600 */
+    --color-destructive-foreground: #ffffff;
+
+    /* Healthcare Specific */
+    --color-surface: #ffffff; /* white */
+    --color-text-primary: #1e293b; /* slate-800 */
+    --color-text-secondary: #64748b; /* slate-500 */
+
+    /* Radius */
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Inter", sans-serif;
+  }
+
+  body,
+  p,
+  span,
+  div {
+    font-family: "Inter", sans-serif;
+  }
+
+  .font-mono {
+    font-family: "JetBrains Mono", monospace;
+  }
+}
+
+/* ---- Reusable component classes ---- */
+@layer components {
+  .healthcare-shadow {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .healthcare-transition {
+    transition: all 200ms ease-out;
+  }
+
+  .clinical-focus {
+    @apply ring-2 ring-primary ring-opacity-50;
+  }
+}

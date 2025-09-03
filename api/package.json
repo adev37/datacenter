@@ -1,0 +1,28 @@
+{
+  "name": "api",
+  "type": "module",
+  "imports": {
+    "#app": "./src/app.js",
+    "#db/*": "./src/db/*",
+    "#middlewares/*": "./src/middlewares/*",
+    "#modules/*": "./src/modules/*",
+    "#utils/*": "./src/utils/*",
+    "#permissions": "./src/modules/roles/permissions.js"
+  },
+  "scripts": {
+    "dev": "node --watch ./server.js",
+    "seed:roles": "node ./src/scripts/seedRoles.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.6.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "zod": "^3.23.8"
+  }
+}

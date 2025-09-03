@@ -1,0 +1,191 @@
+// apps/web/src/pages/settings/CreateUser.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { useCreateUserMutation } from "@/services/users.api";
+import { useListRolesQuery } from "@/services/roles.api";
+import { useMeQuery } from "@/services/auth.api";
+import { skipToken } from "@reduxjs/toolkit/query";
+import { apiErrorMessage } from "@/utils/apiError";
+
+export default function CreateUser() {
+  const nav = useNavigate();
+
+  // Current auth snapshot
+  const token = useSelector((s) => s.auth?.token);
+  const branchId = useSelector((s) => s.auth?.branchId) || "";
+  const { data: me } = useMeQuery(token ? undefined : skipToken);
+  const myRoles = me?.user?.roles || [];
+  const isSuper = myRoles.includes("SUPER_ADMIN");
+  const isBranchAdmin = myRoles.includes("ADMIN");
+
+  // Roles from server (with scope info)
+  const { data: roles = [], isFetching: rolesLoading } = useListRolesQuery();
+
+  // Role options reflect policy:
+  // - SuperAdmin: all roles
+  // - Non-super: BRANCH-scoped roles only, never SUPER_ADMIN
+  // - Admin (branch): cannot assign ADMIN (self-replication restriction)
+  const roleOptions = useMemo(() => {
+    if (isSuper) return roles.map((r) => r.name);
+
+    return roles
+      .filter((r) => r.scope === "BRANCH" && r.name !== "SUPER_ADMIN")
+      .filter((r) => (isBranchAdmin ? r.name !== "ADMIN" : true))
+      .map((r) => r.name);
+  }, [isSuper, isBranchAdmin, roles]);
+
+  // Form state
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "ChangeMe123!",
+    role: roleOptions[0] || "",
+    branch: branchId, // Branch admin is scoped to active branch
+  });
+
+  // Keep default role valid when roleOptions load or change
+  useEffect(() => {
+    setForm((s) => ({
+      ...s,
+      role: roleOptions.includes(s.role) ? s.role : roleOptions[0] || "",
+    }));
+  }, [roleOptions]);
+
+  const [createUser, { isLoading, error, isSuccess }] = useCreateUserMutation();
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+
+    const payload = {
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      roles: form.role ? [form.role] : [],
+      // For non-super the API ignores this and forces X-Branch-Id anyway;
+      // we still send it for SUPER and clarity.
+      branches: form.branch ? [form.branch] : [],
+    };
+
+    await createUser(payload).unwrap();
+  };
+
+  const disabledBranchInput = !isSuper; // lock branch for branch-admin
+  const errMsg = apiErrorMessage(error);
+
+  const policyNote = isSuper
+    ? "As Super Admin, you can assign any role and branch."
+    : isBranchAdmin
+    ? "As Branch Admin, branch is locked and you cannot create another Admin."
+    : "As Branch-scoped user, branch is locked to your hospital.";
+
+  return (
+    <div className="max-w-xl bg-white p-6 rounded shadow">
+      <div className="mb-4">
+        <h1 className="text-xl font-semibold">Create User</h1>
+        <p className="text-sm text-gray-600">{policyNote}</p>
+      </div>
+
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div>
+          <label className="text-sm">Full name</label>
+          <input
+            className="border p-2 w-full"
+            value={form.name}
+            onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm">Email</label>
+          <input
+            className="border p-2 w-full"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm">Password</label>
+          <input
+            className="border p-2 w-full"
+            type="password"
+            value={form.password}
+            onChange={(e) =>
+              setForm((s) => ({ ...s, password: e.target.value }))
+            }
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-sm">Role</label>
+            <select
+              className="border p-2 w-full"
+              value={form.role}
+              disabled={rolesLoading || roleOptions.length === 0}
+              onChange={(e) =>
+                setForm((s) => ({ ...s, role: e.target.value }))
+              }>
+              {roleOptions.length === 0 ? (
+                <option value="" disabled>
+                  {rolesLoading ? "Loading roles…" : "No roles available"}
+                </option>
+              ) : (
+                roleOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))
+              )}
+            </select>
+            {!isSuper && (
+              <p className="mt-1 text-xs text-gray-500">
+                Only branch-scoped roles are available.
+                {isBranchAdmin && " Admins cannot create Admin users."}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-sm">Branch ID</label>
+            <input
+              className="border p-2 w-full disabled:bg-gray-100 disabled:text-gray-500"
+              value={form.branch}
+              onChange={(e) =>
+                setForm((s) => ({ ...s, branch: e.target.value }))
+              }
+              placeholder="e.g. BR001"
+              disabled={disabledBranchInput}
+            />
+            {!isSuper && (
+              <p className="mt-1 text-xs text-gray-500">
+                Locked to your hospital.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {errMsg && <p className="text-red-600 text-sm">{errMsg}</p>}
+        {isSuccess && (
+          <p className="text-green-700 text-sm">User created successfully.</p>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            disabled={isLoading}
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-60">
+            {isLoading ? "Creating…" : "Create user"}
+          </button>
+          <button
+            type="button"
+            className="px-4 py-2 rounded border"
+            onClick={() => nav("/settings/user-management")}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
