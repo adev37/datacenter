@@ -7,10 +7,8 @@ import HospitalContextCard from "./HospitalContextCard";
 import usePermChecker from "@/hooks/usePermChecker";
 
 /**
- * NavigationSidebar
- * - Annotate each group/child with `requirePerm` where appropriate.
- * - Filter using `usePermChecker()` so SUPER_ADMIN bypasses.
- * - If a group ends up with 0 visible children → hide the group.
+ * Sidebar driven by a route-aware config and filtered by permissions.
+ * SUPER_ADMIN can() should always return true for every perm.
  */
 const NavigationSidebar = (props) => {
   const collapsed = props.collapsed ?? props.isCollapsed ?? false;
@@ -27,9 +25,10 @@ const NavigationSidebar = (props) => {
       ? localStorage.getItem("lastPatientId")
       : null;
 
-  // 1) Define raw menu (with requirePerm keys)
+  // 1) Raw menu model — mirrors RoutesApp.jsx
   const rawItems = useMemo(
     () => [
+      // --- Dashboard ---------------------------------------------------------
       {
         label: "Dashboard",
         path: "/dashboard",
@@ -40,6 +39,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Patients ----------------------------------------------------------
       {
         label: "Patients",
         path: "/patients",
@@ -53,7 +53,7 @@ const NavigationSidebar = (props) => {
             requirePerm: "patient.read",
           },
           {
-            label: "Patient Registration",
+            label: "New Patient",
             path: "/patients/new",
             icon: "UserPlus",
             requirePerm: "patient.write",
@@ -72,16 +72,10 @@ const NavigationSidebar = (props) => {
             icon: "FolderOpen",
             requirePerm: "patient.read",
           },
-          {
-            label: "Patient Portal",
-            // Prefer the concrete page to avoid depending on alias
-            path: "/portal/patient",
-            icon: "DoorOpen",
-            requirePerm: "patient.read",
-          },
         ].filter(Boolean),
       },
 
+      // --- Appointments ------------------------------------------------------
       {
         label: "Appointments",
         path: "/appointments",
@@ -103,6 +97,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Medical Records / Encounters -------------------------------------
       {
         label: "Medical Records",
         path: "/encounters",
@@ -142,6 +137,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Lab ---------------------------------------------------------------
       {
         label: "Lab",
         path: "/lab",
@@ -169,6 +165,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Radiology ---------------------------------------------------------
       {
         label: "Radiology",
         path: "/radiology",
@@ -196,6 +193,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Pharmacy ----------------------------------------------------------
       {
         label: "Pharmacy",
         path: "/pharmacy",
@@ -204,13 +202,14 @@ const NavigationSidebar = (props) => {
         children: [
           {
             label: "Dispense",
-            path: "/pharmacy",
+            path: "/pharmacy/dispense", // ← fix to match route
             icon: "PackageOpen",
             requirePerm: "pharmacy.dispense",
           },
         ],
       },
 
+      // --- IPD ---------------------------------------------------------------
       {
         label: "IPD",
         path: "/ipd",
@@ -218,15 +217,15 @@ const NavigationSidebar = (props) => {
         description: "In-patient management",
         children: [
           {
-            label: "Admissions",
-            path: "/ipd/admissions",
-            icon: "ClipboardPlus",
-            requirePerm: "ipd.admit",
-          },
-          {
             label: "Bed Board",
             path: "/ipd/bedboard",
             icon: "Grid",
+            requirePerm: "ipd.admit",
+          },
+          {
+            label: "Admissions",
+            path: "/ipd/admissions",
+            icon: "ClipboardPlus",
             requirePerm: "ipd.admit",
           },
           {
@@ -238,6 +237,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Billing -----------------------------------------------------------
       {
         label: "Billing",
         path: "/billing",
@@ -259,6 +259,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Inventory ---------------------------------------------------------
       {
         label: "Inventory",
         path: "/inventory",
@@ -292,6 +293,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Reports -----------------------------------------------------------
       {
         label: "Reports",
         path: "/reports",
@@ -319,6 +321,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Staff -------------------------------------------------------------
       {
         label: "Staff",
         path: "/staff",
@@ -346,6 +349,7 @@ const NavigationSidebar = (props) => {
         ],
       },
 
+      // --- Settings ----------------------------------------------------------
       {
         label: "Settings",
         path: "/settings",
@@ -353,9 +357,20 @@ const NavigationSidebar = (props) => {
         description: "System configuration",
         children: [
           {
+            label: "Profile",
+            path: "/settings/profile",
+            icon: "User",
+          },
+          {
             label: "User Management",
             path: "/settings/user-management",
             icon: "Users",
+            requirePerm: "settings.user",
+          },
+          {
+            label: "Create User",
+            path: "/settings/create-user",
+            icon: "UserPlus",
             requirePerm: "settings.user",
           },
           {
@@ -376,9 +391,32 @@ const NavigationSidebar = (props) => {
             icon: "SlidersHorizontal",
             requirePerm: "settings.preferences",
           },
+          {
+            label: "Audit Logs",
+            path: "/settings/audit-logs",
+            icon: "ClipboardList",
+            requirePerm: "audit.read",
+          },
         ],
       },
 
+      // --- Portal ------------------------------------------------------------
+      {
+        label: "Portal",
+        path: "/portal",
+        icon: "DoorOpen",
+        description: "Patient self service",
+        children: [
+          {
+            label: "Patient Portal",
+            path: "/portal",
+            icon: "DoorOpen",
+            requirePerm: "patient.read",
+          },
+        ],
+      },
+
+      // --- Help & Notifications ----------------------------------------------
       {
         label: "Help & Notifications",
         path: "/help",
@@ -398,7 +436,7 @@ const NavigationSidebar = (props) => {
     [lastPatientId]
   );
 
-  // 2) Resolve visible items based on permissions
+  // 2) Permission filtering
   const items = useMemo(() => {
     return rawItems
       .map((g) => {
@@ -409,13 +447,12 @@ const NavigationSidebar = (props) => {
           children.length > 0 ||
           ((g.children || []).length === 0 &&
             (!g.requirePerm || can(g.requirePerm)));
-
         return groupVisible ? { ...g, children } : null;
       })
       .filter(Boolean);
   }, [rawItems, can]);
 
-  // expand state
+  // 3) Expand/collapse state derived from current route
   const defaultExpanded = useMemo(() => {
     const map = {};
     items.forEach((it) => {
@@ -427,7 +464,6 @@ const NavigationSidebar = (props) => {
 
   const [expanded, setExpanded] = useState(defaultExpanded);
   useEffect(() => setExpanded(defaultExpanded), [defaultExpanded]);
-
   const toggleGroup = (path) =>
     setExpanded((s) => ({ ...s, [path]: !s?.[path] }));
 
@@ -457,8 +493,8 @@ const NavigationSidebar = (props) => {
               const active = isActive(item.path);
               const hasChildren = !!item.children?.length;
 
+              // Collapsed OR leaf nodes
               if (collapsed || !hasChildren) {
-                // Collapsed: show a single link to the section root
                 return (
                   <Link
                     key={item.path}
@@ -562,7 +598,7 @@ const NavigationSidebar = (props) => {
         </div>
       </aside>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav (quick access to most-used areas) */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white lg:hidden">
         <div className="flex items-center justify-around py-2">
           {[

@@ -1,182 +1,281 @@
 // apps/web/src/RoutesApp.jsx
+// -------------------------------------------------------------
+// Central app routing with:
+//  - Auth gating + role/permission protected routes
+//  - Route-level code splitting via React.lazy
+//  - Single Suspense fallback + small per-page fallbacks
+//  - Optional pages wrapped with safe dynamic imports
+//  - Clear grouping and aliases for canonical paths
+// -------------------------------------------------------------
+
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
+// Core auth/layout
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
-import Dashboard from "./pages/admin-dashboard";
 import NotAuthorized from "./pages/NotAuthorized";
 import NotFound from "./pages/NotFound";
+import Dashboard from "./pages/admin-dashboard";
 
 import PrivateRoute from "./components/route/PrivateRoute";
 import AuthGate from "./components/route/AuthGate";
 import DashboardLayout from "@/layout/DashboardLayout";
 
-// ---- Patients
-const PatientsList = React.lazy(() => import("./pages/patients/PatientsList"));
-const AddPatient = React.lazy(() =>
-  import("./pages/patients/registration/NewRegistration")
-);
-const PatientProfile = React.lazy(() =>
-  import("./pages/patients/PatientProfile")
-);
-const PatientMedicalRecords = React.lazy(() =>
-  import("./pages/patients/patient-medical-record")
+// ---- Lazy helper -----------------------------------------------------------
+// Wrap any element with <Suspense> so we don’t repeat the fallback everywhere.
+const WithSuspense = ({ children }) => (
+  <React.Suspense fallback={<div className="p-6">Loading…</div>}>
+    {children}
+  </React.Suspense>
 );
 
-// ---- Appointments
-const AppointmentList = React.lazy(() =>
-  import("./pages/appointments/AppointmentScheduling")
+// ---- Patients --------------------------------------------------------------
+// webpackChunkName comments help create readable chunk names in builds.
+const PatientsList = React.lazy(() =>
+  import(
+    /* webpackChunkName: "patients-list" */ "./pages/patients/PatientsList"
+  )
 );
-// Optional Calendar page (won’t crash if not present)
+const AddPatient = React.lazy(() =>
+  import(
+    /* webpackChunkName: "patients-new" */ "./pages/patients/registration/NewRegistration"
+  )
+);
+const PatientProfile = React.lazy(() =>
+  import(
+    /* webpackChunkName: "patients-profile" */ "./pages/patients/PatientProfile"
+  )
+);
+const PatientMedicalRecords = React.lazy(() =>
+  import(
+    /* webpackChunkName: "patients-medical-records" */ "./pages/patients/patient-medical-record"
+  )
+);
+
+// ---- Appointments ----------------------------------------------------------
+const AppointmentList = React.lazy(() =>
+  import(
+    /* webpackChunkName: "appointments-list" */ "./pages/appointments/AppointmentScheduling"
+  )
+);
+// Optional Calendar page (keeps app from crashing if file doesn’t exist)
 const CalendarView = React.lazy(() =>
-  import("./pages/appointments/Calendar.jsx").catch(() => ({
+  import(
+    /* webpackChunkName: "appointments-calendar" */ "./pages/appointments/Calendar.jsx"
+  ).catch(() => ({
     default: () => <div className="p-6">Calendar page not implemented.</div>,
   }))
 );
 
-// ---- Encounters / Records
+// ---- Encounters / Records --------------------------------------------------
 const StartEncounter = React.lazy(() =>
-  import("./pages/encounters/StartEncounter")
+  import(
+    /* webpackChunkName: "encounters-start" */ "./pages/encounters/StartEncounter"
+  )
 );
-const SOAPEditor = React.lazy(() => import("./pages/encounters/SOAPEditor"));
-const VitalsForm = React.lazy(() => import("./pages/encounters/VitalsForm"));
-const Orders = React.lazy(() => import("./pages/encounters/Orders"));
+const SOAPEditor = React.lazy(() =>
+  import(
+    /* webpackChunkName: "encounters-soap" */ "./pages/encounters/SOAPEditor"
+  )
+);
+const VitalsForm = React.lazy(() =>
+  import(
+    /* webpackChunkName: "encounters-vitals" */ "./pages/encounters/VitalsForm"
+  )
+);
+const Orders = React.lazy(() =>
+  import(
+    /* webpackChunkName: "encounters-orders" */ "./pages/encounters/Orders"
+  )
+);
 const Prescriptions = React.lazy(() =>
-  import("./pages/encounters/Prescriptions")
+  import(
+    /* webpackChunkName: "encounters-prescriptions" */ "./pages/encounters/Prescriptions"
+  )
 );
 
-// ---- Lab
-const LabOrders = React.lazy(() => import("./pages/lab/LabOrders"));
+// ---- Lab -------------------------------------------------------------------
+const LabOrders = React.lazy(() =>
+  import(/* webpackChunkName: "lab-orders" */ "./pages/lab/LabOrders")
+);
 const SampleCollection = React.lazy(() =>
-  import("./pages/lab/SampleCollection")
+  import(/* webpackChunkName: "lab-samples" */ "./pages/lab/SampleCollection")
 );
-const ResultsEntry = React.lazy(() => import("./pages/lab/ResultsEntry"));
+const ResultsEntry = React.lazy(() =>
+  import(/* webpackChunkName: "lab-results" */ "./pages/lab/ResultsEntry")
+);
 
-// ---- Radiology
-const RadOrders = React.lazy(() => import("./pages/radiology/RadOrders"));
-const StudyViewer = React.lazy(() => import("./pages/radiology/StudyViewer"));
-const RadReports = React.lazy(() => import("./pages/radiology/Reports"));
+// ---- Radiology -------------------------------------------------------------
+const RadOrders = React.lazy(() =>
+  import(/* webpackChunkName: "rad-orders" */ "./pages/radiology/RadOrders")
+);
+const StudyViewer = React.lazy(() =>
+  import(/* webpackChunkName: "rad-viewer" */ "./pages/radiology/StudyViewer")
+);
+const RadReports = React.lazy(() =>
+  import(/* webpackChunkName: "rad-reports" */ "./pages/radiology/Reports")
+);
 
-// ---- Pharmacy
-const Dispense = React.lazy(() => import("./pages/pharmacy/Dispense"));
+// ---- Pharmacy --------------------------------------------------------------
+const Dispense = React.lazy(() =>
+  import(
+    /* webpackChunkName: "pharmacy-dispense" */ "./pages/pharmacy/Dispense"
+  )
+);
 
-// ---- IPD
-const BedBoard = React.lazy(() => import("./pages/ipd/BedBoard"));
-const Admissions = React.lazy(() => import("./pages/ipd/Admissions"));
-const EMAR = React.lazy(() => import("./pages/ipd/eMAR"));
+// ---- IPD -------------------------------------------------------------------
+const BedBoard = React.lazy(() =>
+  import(/* webpackChunkName: "ipd-bedboard" */ "./pages/ipd/BedBoard")
+);
+const Admissions = React.lazy(() =>
+  import(/* webpackChunkName: "ipd-admissions" */ "./pages/ipd/Admissions")
+);
+const EMAR = React.lazy(() =>
+  import(/* webpackChunkName: "ipd-emar" */ "./pages/ipd/eMAR")
+);
 
-// ---- Billing
-const Invoices = React.lazy(() => import("./pages/billing/Invoices"));
-const Payments = React.lazy(() => import("./pages/billing/Payments"));
+// ---- Billing ---------------------------------------------------------------
+const Invoices = React.lazy(() =>
+  import(/* webpackChunkName: "billing-invoices" */ "./pages/billing/Invoices")
+);
+const Payments = React.lazy(() =>
+  import(/* webpackChunkName: "billing-payments" */ "./pages/billing/Payments")
+);
 
-// ---- Inventory
-const Items = React.lazy(() => import("./pages/inventory/Items"));
-const GRN = React.lazy(() => import("./pages/inventory/GRN"));
+// ---- Inventory -------------------------------------------------------------
+const Items = React.lazy(() =>
+  import(/* webpackChunkName: "inv-items" */ "./pages/inventory/Items")
+);
+const GRN = React.lazy(() =>
+  import(/* webpackChunkName: "inv-grn" */ "./pages/inventory/GRN")
+);
 const StockTransfer = React.lazy(() =>
-  import("./pages/inventory/StockTransfer")
+  import(
+    /* webpackChunkName: "inv-transfer" */ "./pages/inventory/StockTransfer"
+  )
 );
-const Ledger = React.lazy(() => import("./pages/inventory/Ledger"));
+const Ledger = React.lazy(() =>
+  import(/* webpackChunkName: "inv-ledger" */ "./pages/inventory/Ledger")
+);
 
-// ---- Portal
-const PatientPortal = React.lazy(() => import("./pages/portal/PatientPortal"));
+// ---- Portal ---------------------------------------------------------------
+const PatientPortal = React.lazy(() =>
+  import(/* webpackChunkName: "portal" */ "./pages/portal/PatientPortal")
+);
 
-// ---- Reports (optional—safe fallbacks)
+// ---- Reports (optional, safe fallbacks) -----------------------------------
 const FinanceReports = React.lazy(() =>
-  import("./pages/reports/FinanceReports.jsx").catch(() => ({
+  import(
+    /* webpackChunkName: "reports-finance" */ "./pages/reports/FinanceReports.jsx"
+  ).catch(() => ({
     default: () => <div className="p-6">Finance Reports not implemented.</div>,
   }))
 );
 const ClinicalReports = React.lazy(() =>
-  import("./pages/reports/ClinicalReports.jsx").catch(() => ({
+  import(
+    /* webpackChunkName: "reports-clinical" */ "./pages/reports/ClinicalReports.jsx"
+  ).catch(() => ({
     default: () => <div className="p-6">Clinical Reports not implemented.</div>,
   }))
 );
 const InventoryReports = React.lazy(() =>
-  import("./pages/reports/InventoryReports.jsx").catch(() => ({
+  import(
+    /* webpackChunkName: "reports-inventory" */ "./pages/reports/InventoryReports.jsx"
+  ).catch(() => ({
     default: () => (
       <div className="p-6">Inventory Reports not implemented.</div>
     ),
   }))
 );
 
-// ---- Staff (optional—safe fallbacks)
+// ---- Staff (optional, safe fallbacks) -------------------------------------
 const Doctors = React.lazy(() =>
-  import("./pages/staff/Doctors").catch(() => ({
-    default: () => <div className="p-6">Doctors page not implemented.</div>,
-  }))
+  import(/* webpackChunkName: "staff-doctors" */ "./pages/staff/Doctors").catch(
+    () => ({
+      default: () => <div className="p-6">Doctors page not implemented.</div>,
+    })
+  )
 );
 const Nurses = React.lazy(() =>
-  import("./pages/staff/Nurses").catch(() => ({
-    default: () => <div className="p-6">Nurses page not implemented.</div>,
-  }))
+  import(/* webpackChunkName: "staff-nurses" */ "./pages/staff/Nurses").catch(
+    () => ({
+      default: () => <div className="p-6">Nurses page not implemented.</div>,
+    })
+  )
 );
 const StaffSchedules = React.lazy(() =>
-  import("./pages/staff/StaffSchedules").catch(() => ({
+  import(
+    /* webpackChunkName: "staff-schedules" */ "./pages/staff/StaffSchedules"
+  ).catch(() => ({
     default: () => <div className="p-6">Staff Schedules not implemented.</div>,
   }))
 );
 
-// ---- Settings
+// ---- Settings --------------------------------------------------------------
 const UserProfileSettings = React.lazy(() =>
-  import("./pages/settings/UserProfileSettings")
+  import(
+    /* webpackChunkName: "settings-profile" */ "./pages/settings/UserProfileSettings"
+  )
 );
 const UserManagement = React.lazy(() =>
-  import("./pages/settings/UserManagement")
+  import(
+    /* webpackChunkName: "settings-user-mgmt" */ "./pages/settings/UserManagement"
+  )
 );
 const RolePermissions = React.lazy(() =>
-  import("./pages/settings/RolePermissions")
+  import(
+    /* webpackChunkName: "settings-role" */ "./pages/settings/RolePermissions"
+  )
 );
-const Departments = React.lazy(() => import("./pages/settings/Departments"));
-const Preferences = React.lazy(() => import("./pages/settings/Preferences"));
-const CreateUser = React.lazy(() => import("./pages/settings/CreateUser"));
+const Departments = React.lazy(() =>
+  import(
+    /* webpackChunkName: "settings-departments" */ "./pages/settings/Departments"
+  )
+);
+const Preferences = React.lazy(() =>
+  import(
+    /* webpackChunkName: "settings-preferences" */ "./pages/settings/Preferences"
+  )
+);
+const CreateUser = React.lazy(() =>
+  import(
+    /* webpackChunkName: "settings-create-user" */ "./pages/settings/CreateUser"
+  )
+);
+import AuditLogs from "@/pages/settings/AuditLogs"; // (eager load; tiny page)
 
-// ---- Misc (optional—safe fallbacks)
-const Notifications = React.lazy(() =>
-  import("./pages/notifications/Notifications").catch(() => ({
-    default: () => <div className="p-6">Notifications not implemented.</div>,
-  }))
-);
-const Help = React.lazy(() =>
-  import("./pages/help/Help.jsx").catch(() => ({
-    default: () => <div className="p-6">Help page not implemented.</div>,
-  }))
-);
-
-const Fallback = ({ children }) => (
-  <React.Suspense fallback={<div className="p-6">Loading…</div>}>
-    {children}
-  </React.Suspense>
-);
+// =============================================================================
 
 export default function RoutesApp() {
   return (
     <AuthGate>
       <Routes>
-        {/* Public */}
+        {/* ------------------ Public ------------------ */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/403" element={<NotAuthorized />} />
 
-        {/* Private area with layout */}
+        {/* ------------------ Private + Layout Shell ------------------ */}
         <Route
           path="/"
           element={<PrivateRoute element={<DashboardLayout />} />}>
+          {/* Default redirect to dashboard */}
           <Route index element={<Navigate to="dashboard" replace />} />
 
-          {/* Dashboard */}
+          {/* ------ Dashboard ------ */}
           <Route path="dashboard" element={<Dashboard />} />
 
-          {/* Patients */}
+          {/* ------ Patients ------ */}
           <Route
             path="patients"
             element={
               <PrivateRoute
                 requirePerm="patient.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <PatientsList />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -187,9 +286,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="patient.write"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <AddPatient />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -200,9 +299,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="patient.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <PatientProfile />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -213,24 +312,24 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="patient.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <PatientMedicalRecords />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Appointments */}
+          {/* ------ Appointments ------ */}
           <Route
             path="appointments"
             element={
               <PrivateRoute
                 requirePerm="appointment.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <AppointmentList />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -241,24 +340,24 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="appointment.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <CalendarView />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Encounters / Records */}
+          {/* ------ Encounters / Records ------ */}
           <Route
             path="encounters"
             element={
               <PrivateRoute
                 requirePerm="encounter.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <StartEncounter />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -269,9 +368,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="encounter.write"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <SOAPEditor />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -282,9 +381,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="vitals.write"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <VitalsForm />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -295,9 +394,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="encounter.write"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Orders />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -308,28 +407,29 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="prescription.write"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Prescriptions />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
+          {/* Alias for legacy path */}
           <Route
             path="records"
             element={<Navigate to="../encounters" replace />}
           />
 
-          {/* Lab (canonical = /lab + children) */}
+          {/* ------ Lab (canonical /lab) ------ */}
           <Route
             path="lab"
             element={
               <PrivateRoute
                 requirePerm="lab.order"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <LabOrders />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -340,9 +440,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="lab.result"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <SampleCollection />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -353,30 +453,30 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="lab.result"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <ResultsEntry />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
-          {/* aliases */}
+          {/* Lab aliases */}
           <Route path="lab/orders" element={<Navigate to="../lab" replace />} />
           <Route
             path="lab/sample"
             element={<Navigate to="../lab/samples" replace />}
           />
 
-          {/* Radiology (canonical = /radiology for orders) */}
+          {/* ------ Radiology ------ */}
           <Route
             path="radiology"
             element={
               <PrivateRoute
                 requirePerm="rad.order"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <RadOrders />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -387,9 +487,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="rad.report"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <StudyViewer />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -400,34 +500,35 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="rad.report"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <RadReports />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Pharmacy */}
+          {/* ------ Pharmacy ------ */}
           <Route
             path="pharmacy/dispense"
             element={
               <PrivateRoute
                 requirePerm="pharmacy.dispense"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Dispense />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
+          {/* Canonical redirect */}
           <Route
             path="pharmacy"
             element={<Navigate to="pharmacy/dispense" replace />}
           />
 
-          {/* IPD */}
+          {/* ------ IPD ------ */}
           <Route path="ipd" element={<Navigate to="ipd/bedboard" replace />} />
           <Route
             path="ipd/bedboard"
@@ -435,14 +536,14 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="ipd.admit"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <BedBoard />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
-          {/* alias with hyphen */}
+          {/* Alias with hyphen */}
           <Route
             path="ipd/bed-board"
             element={<Navigate to="../ipd/bedboard" replace />}
@@ -453,9 +554,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="ipd.admit"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Admissions />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -466,15 +567,15 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="emar.administer"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <EMAR />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Billing */}
+          {/* ------ Billing ------ */}
           <Route
             path="billing"
             element={<Navigate to="billing/invoices" replace />}
@@ -485,9 +586,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="billing.invoice"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Invoices />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -498,15 +599,15 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="billing.payment"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Payments />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Inventory */}
+          {/* ------ Inventory ------ */}
           <Route
             path="inventory"
             element={<Navigate to="inventory/items" replace />}
@@ -517,9 +618,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="inv.item"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Items />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -530,9 +631,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="inv.grn"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <GRN />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -543,9 +644,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="inv.transfer"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <StockTransfer />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -556,24 +657,24 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="inv.ledger"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Ledger />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Reports (optional) */}
+          {/* ------ Reports (optional) ------ */}
           <Route
             path="reports/finance"
             element={
               <PrivateRoute
                 requirePerm="reports.finance"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <FinanceReports />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -584,9 +685,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="reports.clinical"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <ClinicalReports />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -597,24 +698,24 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="reports.inventory"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <InventoryReports />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Staff (optional) */}
+          {/* ------ Staff (optional) ------ */}
           <Route
             path="staff/doctors"
             element={
               <PrivateRoute
                 requirePerm="staff.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Doctors />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -625,9 +726,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="staff.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Nurses />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -638,23 +739,23 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="staff.schedule"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <StaffSchedules />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
 
-          {/* Settings */}
+          {/* ------ Settings ------ */}
           <Route
             path="settings/profile"
             element={
               <PrivateRoute
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <UserProfileSettings />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -665,9 +766,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="settings.user"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <UserManagement />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -678,9 +779,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="settings.user"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <CreateUser />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -691,9 +792,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="settings.role"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <RolePermissions />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -704,9 +805,9 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="settings.department"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Departments />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
@@ -717,63 +818,37 @@ export default function RoutesApp() {
               <PrivateRoute
                 requirePerm="settings.preferences"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <Preferences />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
+          <Route path="/settings/audit-logs" element={<AuditLogs />} />
 
-          {/* Portal (align with sidebar) */}
+          {/* ------ Portal ------ */}
           <Route
             path="portal"
             element={
               <PrivateRoute
                 requirePerm="patient.read"
                 element={
-                  <Fallback>
+                  <WithSuspense>
                     <PatientPortal />
-                  </Fallback>
+                  </WithSuspense>
                 }
               />
             }
           />
-          {/* alias for any old link */}
+          {/* Alias for legacy link */}
           <Route
             path="portal/patient"
             element={<Navigate to="../portal" replace />}
           />
-
-          {/* Notifications & Help (optional) */}
-          <Route
-            path="notifications"
-            element={
-              <PrivateRoute
-                requirePerm="notifications.read"
-                element={
-                  <Fallback>
-                    <Notifications />
-                  </Fallback>
-                }
-              />
-            }
-          />
-          <Route
-            path="help"
-            element={
-              <PrivateRoute
-                element={
-                  <Fallback>
-                    <Help />
-                  </Fallback>
-                }
-              />
-            }
-          />
         </Route>
 
-        {/* Fallbacks */}
+        {/* ------------------ 404 fallback ------------------ */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AuthGate>

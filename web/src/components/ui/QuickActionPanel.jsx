@@ -79,6 +79,7 @@ export default function QuickActionPanel() {
             requirePerm: "reports.finance",
           },
         ]);
+
       case location.pathname.startsWith("/patients"):
         return filterAllowed([
           ...baseActions,
@@ -103,10 +104,11 @@ export default function QuickActionPanel() {
             label: "Open Portal",
             icon: "DoorOpen",
             color: "primary",
-            run: () => navigate("/portal/patient"),
+            run: () => navigate("/portal"), // ← canonical
             requirePerm: "patient.read",
           },
         ]);
+
       case location.pathname.startsWith("/appointments"):
         return filterAllowed([
           ...baseActions,
@@ -119,6 +121,7 @@ export default function QuickActionPanel() {
             requirePerm: "appointment.read",
           },
         ]);
+
       case location.pathname.startsWith("/encounters"):
         return filterAllowed([
           ...baseActions,
@@ -147,6 +150,7 @@ export default function QuickActionPanel() {
             requirePerm: "vitals.write",
           },
         ]);
+
       case location.pathname.startsWith("/lab"):
         return filterAllowed([
           ...baseActions,
@@ -167,6 +171,7 @@ export default function QuickActionPanel() {
             requirePerm: "lab.result",
           },
         ]);
+
       case location.pathname.startsWith("/radiology"):
         return filterAllowed([
           ...baseActions,
@@ -187,6 +192,7 @@ export default function QuickActionPanel() {
             requirePerm: "rad.report",
           },
         ]);
+
       case location.pathname.startsWith("/pharmacy"):
         return filterAllowed([
           ...baseActions,
@@ -195,10 +201,11 @@ export default function QuickActionPanel() {
             label: "Dispense",
             icon: "PackageOpen",
             color: "success",
-            run: () => navigate("/pharmacy"),
+            run: () => navigate("/pharmacy/dispense"), // ← canonical
             requirePerm: "pharmacy.dispense",
           },
         ]);
+
       case location.pathname.startsWith("/ipd"):
         return filterAllowed([
           ...baseActions,
@@ -227,6 +234,7 @@ export default function QuickActionPanel() {
             requirePerm: "emar.administer",
           },
         ]);
+
       case location.pathname.startsWith("/billing"):
         return filterAllowed([
           ...baseActions,
@@ -247,6 +255,7 @@ export default function QuickActionPanel() {
             requirePerm: "billing.payment",
           },
         ]);
+
       case location.pathname.startsWith("/inventory"):
         return filterAllowed([
           ...baseActions,
@@ -283,6 +292,7 @@ export default function QuickActionPanel() {
             requirePerm: "inv.ledger",
           },
         ]);
+
       case location.pathname.startsWith("/reports"):
         return filterAllowed([
           ...baseActions,
@@ -311,6 +321,7 @@ export default function QuickActionPanel() {
             requirePerm: "reports.inventory",
           },
         ]);
+
       case location.pathname.startsWith("/settings"):
         return filterAllowed([
           ...baseActions,
@@ -339,6 +350,7 @@ export default function QuickActionPanel() {
             requirePerm: "settings.preferences",
           },
         ]);
+
       case location.pathname.startsWith("/staff"):
         return filterAllowed([
           ...baseActions,
@@ -367,6 +379,20 @@ export default function QuickActionPanel() {
             requirePerm: "staff.schedule",
           },
         ]);
+
+      case location.pathname.startsWith("/portal"):
+        return filterAllowed([
+          ...baseActions,
+          {
+            id: "open-portal",
+            label: "Patient Portal",
+            icon: "DoorOpen",
+            color: "primary",
+            run: () => navigate("/portal"),
+            requirePerm: "patient.read",
+          },
+        ]);
+
       default:
         return filterAllowed(baseActions);
     }

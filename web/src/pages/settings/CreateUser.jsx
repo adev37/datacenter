@@ -22,15 +22,19 @@ export default function CreateUser() {
   // Roles from server (with scope info)
   const { data: roles = [], isFetching: rolesLoading } = useListRolesQuery();
 
+  // Hide roles we don't want exposed via UI
+  const HIDE_ALWAYS = new Set(["BRANCH_ADMIN", "SUPER_ADMIN"]);
+
   // Role options reflect policy:
-  // - SuperAdmin: all roles
-  // - Non-super: BRANCH-scoped roles only, never SUPER_ADMIN
+  // - SuperAdmin: all roles EXCEPT SUPER_ADMIN/BRANCH_ADMIN
+  // - Non-super: BRANCH-scoped roles only, never SUPER_ADMIN/BRANCH_ADMIN
   // - Admin (branch): cannot assign ADMIN (self-replication restriction)
   const roleOptions = useMemo(() => {
-    if (isSuper) return roles.map((r) => r.name);
-
+    if (isSuper) {
+      return roles.filter((r) => !HIDE_ALWAYS.has(r.name)).map((r) => r.name);
+    }
     return roles
-      .filter((r) => r.scope === "BRANCH" && r.name !== "SUPER_ADMIN")
+      .filter((r) => r.scope === "BRANCH" && !HIDE_ALWAYS.has(r.name))
       .filter((r) => (isBranchAdmin ? r.name !== "ADMIN" : true))
       .map((r) => r.name);
   }, [isSuper, isBranchAdmin, roles]);
@@ -44,6 +48,9 @@ export default function CreateUser() {
     branch: branchId, // Branch admin is scoped to active branch
   });
 
+  // local validation error (UI only)
+  const [localError, setLocalError] = useState("");
+
   // Keep default role valid when roleOptions load or change
   useEffect(() => {
     setForm((s) => ({
@@ -56,6 +63,13 @@ export default function CreateUser() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    setLocalError("");
+
+    // Guard: When SUPER creates an ADMIN, a single branch is required
+    if (isSuper && form.role === "ADMIN" && !form.branch.trim()) {
+      setLocalError("Branch ID is required when creating an ADMIN.");
+      return;
+    }
 
     const payload = {
       name: form.name,
@@ -67,14 +81,20 @@ export default function CreateUser() {
       branches: form.branch ? [form.branch] : [],
     };
 
-    await createUser(payload).unwrap();
+    try {
+      await createUser(payload).unwrap();
+      // Optional: navigate back to list after success
+      // nav("/settings/user-management");
+    } catch {
+      // handled by RTKQ error state
+    }
   };
 
   const disabledBranchInput = !isSuper; // lock branch for branch-admin
   const errMsg = apiErrorMessage(error);
 
   const policyNote = isSuper
-    ? "As Super Admin, you can assign any role and branch."
+    ? "As Super Admin, you can assign any role (except Super Admin) and any branch."
     : isBranchAdmin
     ? "As Branch Admin, branch is locked and you cannot create another Admin."
     : "As Branch-scoped user, branch is locked to your hospital.";
@@ -167,6 +187,7 @@ export default function CreateUser() {
           </div>
         </div>
 
+        {localError && <p className="text-red-600 text-sm">{localError}</p>}
         {errMsg && <p className="text-red-600 text-sm">{errMsg}</p>}
         {isSuccess && (
           <p className="text-green-700 text-sm">User created successfully.</p>

@@ -1,5 +1,6 @@
+// apps/web/src/components/ui/GlobalHeader.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import Icon from "../AppIcon";
 import Button from "./Button";
@@ -8,10 +9,16 @@ import { signOut } from "@/store/slices/authSlice";
 import { api } from "@/services/baseApi";
 import usePermChecker from "@/hooks/usePermChecker";
 
-// current user (returns .photoUrl)
+// Current user (returns .photoUrl/.fullName/.initials)
 import useCurrentUser from "@/hooks/useCurrentUser";
 import ImgWithFallback from "../ImgWithFallback";
 
+/**
+ * GlobalHeader
+ * - Top app bar with burger (mobile), primary navigation, notifications, and profile
+ * - Mirrors the major sections from RoutesApp.jsx
+ * - All menu entries are permission-aware
+ */
 export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -19,30 +26,21 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
   const profileRef = useRef(null);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   const hasPerm = usePermChecker();
-
   const { user, isLoading: userLoading } = useCurrentUser();
 
+  // Demo notifications – plug into real API later
   const notifications = useMemo(
     () => [
-      {
-        id: 1,
-        type: "critical",
-        message: "Lab results ready for Patient #12345",
-        time: "2 min ago",
-      },
-      {
-        id: 2,
-        type: "warning",
-        message: "Medication interaction alert",
-        time: "5 min ago",
-      },
+      { id: 1, type: "critical", message: "Lab results ready", time: "2m" },
+      { id: 2, type: "warning", message: "Medication interaction", time: "5m" },
       {
         id: 3,
         type: "info",
-        message: "Appointment reminder: 3:00 PM",
-        time: "10 min ago",
+        message: "Appointment reminder 3:00 PM",
+        time: "10m",
       },
     ],
     []
@@ -68,20 +66,23 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     navigate("/login", { replace: true });
   }, [dispatch, navigate, onSignOut]);
 
+  // Close dropdowns on outside click / ESC
   useEffect(() => {
     const onDocClick = (e) => {
       if (
         notificationOpen &&
         notifRef.current &&
         !notifRef.current.contains(e.target)
-      )
+      ) {
         setNotificationOpen(false);
+      }
       if (
         profileOpen &&
         profileRef.current &&
         !profileRef.current.contains(e.target)
-      )
+      ) {
         setProfileOpen(false);
+      }
     };
     const onEsc = (e) => {
       if (e.key === "Escape") {
@@ -97,6 +98,13 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     };
   }, [notificationOpen, profileOpen]);
 
+  // Close any open menus when the route changes
+  useEffect(() => {
+    setNotificationOpen(false);
+    setProfileOpen(false);
+  }, [location.pathname]);
+
+  // Top app bar links → common sections
   const mainNav = [
     { to: "/dashboard", label: "Dashboard" },
     { to: "/patients", label: "Patients", requirePerm: "patient.read" },
@@ -109,6 +117,8 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     { to: "/billing", label: "Billing", requirePerm: "billing.invoice" },
     { to: "/inventory", label: "Inventory", requirePerm: "inv.item" },
   ];
+
+  // “More” menu → the rest (aligns with RoutesApp & Sidebar)
   const moreNav = [
     { to: "/lab", label: "Lab", requirePerm: "lab.order" },
     { to: "/radiology", label: "Radiology", requirePerm: "rad.order" },
@@ -117,20 +127,32 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
       label: "Pharmacy",
       requirePerm: "pharmacy.dispense",
     },
-    { to: "/ipd/admissions", label: "IPD", requirePerm: "ipd.admit" },
+    { to: "/ipd/bedboard", label: "IPD", requirePerm: "ipd.admit" },
     {
       to: "/reports/finance",
       label: "Reports",
       requirePerm: "reports.finance",
     },
     { to: "/staff/doctors", label: "Staff", requirePerm: "staff.read" },
+    { to: "/portal", label: "Portal", requirePerm: "patient.read" },
     {
       to: "/settings/user-management",
       label: "Settings",
       requirePerm: "settings.user",
     },
+    {
+      to: "/settings/audit-logs",
+      label: "Audit Logs",
+      requirePerm: "audit.read",
+    },
+    {
+      to: "/notifications",
+      label: "Notifications",
+      requirePerm: "notifications.read",
+    },
     { to: "/help", label: "Help" },
   ];
+
   const visibleMainNav = mainNav.filter(
     (i) => !i.requirePerm || hasPerm(i.requirePerm)
   );
@@ -138,12 +160,12 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     (i) => !i.requirePerm || hasPerm(i.requirePerm)
   );
 
+  // Avatars with graceful fallback
   const smallFallback = (
     <div className="grid h-9 w-9 place-content-center rounded-full bg-gray-300 text-white">
       <span className="text-xs font-semibold">{user?.initials || "U"}</span>
     </div>
   );
-
   const largeFallback = (
     <div className="grid h-12 w-12 place-content-center rounded-full bg-gray-300 text-white">
       <span className="text-sm font-semibold">{user?.initials || "U"}</span>
@@ -152,21 +174,21 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
 
   const AvatarSmall = () => (
     <ImgWithFallback
-      src={user.photoUrl}
-      alt={user.fullName}
+      src={user?.photoUrl}
+      alt={user?.fullName || "User"}
       className="h-9 w-9 rounded-full object-cover"
       fallback={smallFallback}
     />
   );
-
   const AvatarLarge = () => (
     <ImgWithFallback
-      src={user.photoUrl}
-      alt={user.fullName}
+      src={user?.photoUrl}
+      alt={user?.fullName || "User"}
       className="h-12 w-12 rounded-full object-cover"
       fallback={largeFallback}
     />
   );
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b bg-white/95 backdrop-blur dark:border-gray-800 dark:bg-gray-950/70">
       <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between px-4">
@@ -180,7 +202,6 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
             aria-label="Toggle sidebar">
             <Icon name="Menu" size={20} />
           </Button>
-
           <Link to="/dashboard" className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-content-center rounded-full bg-blue-600 text-white">
               <Icon name="Heart" size={18} color="white" />
@@ -197,7 +218,7 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
         </div>
 
         {/* Center: desktop nav */}
-        <nav className="hidden items-center gap-1 lg:flex">
+        <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary">
           {visibleMainNav.map(({ to, label }) => (
             <NavLink
               key={to}
@@ -213,23 +234,27 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
               {label}
             </NavLink>
           ))}
+
+          {/* More menu */}
           {visibleMoreNav.length > 0 && (
             <div className="relative group">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">
+                className="text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                aria-haspopup="menu"
+                aria-expanded="false">
                 More <Icon name="ChevronDown" size={16} className="ml-1" />
               </Button>
               <div className="invisible absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border bg-white opacity-0 shadow-lg transition-all group-hover:visible group-hover:opacity-100 dark:border-gray-800 dark:bg-gray-900">
-                <ul className="py-2">
+                <ul className="py-2" role="menu">
                   {visibleMoreNav.map(({ to, label }) => (
-                    <li key={to}>
+                    <li key={to} role="none">
                       <Link
                         to={to}
+                        role="menuitem"
                         className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800">
-                        <Icon name="ChevronRight" size={14} />
-                        {label}
+                        <Icon name="ChevronRight" size={14} /> {label}
                       </Link>
                     </li>
                   ))}
@@ -261,6 +286,7 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
                 </span>
               )}
             </Button>
+
             {notificationOpen && (
               <div
                 role="menu"
@@ -322,10 +348,10 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
               <AvatarSmall />
               <div className="hidden text-left leading-tight md:block">
                 <p className="text-sm font-medium text-gray-900 group-hover:text-white">
-                  {userLoading ? "Loading…" : user.fullName}
+                  {userLoading ? "Loading…" : user?.fullName}
                 </p>
                 <p className="text-xs text-gray-500 group-hover:text-white/90">
-                  {user.profession || "\u00A0"}
+                  {user?.profession || "\u00A0"}
                 </p>
               </div>
               <Icon
@@ -344,33 +370,49 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
                     <AvatarLarge />
                     <div className="leading-tight">
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {user.fullName}
+                        {user?.fullName || "User"}
                       </p>
-                      {user.profession && (
+                      {user?.profession && (
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           {user.profession}
                         </p>
                       )}
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {user.shiftLabel}
-                      </p>
+                      {user?.shiftLabel && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {user.shiftLabel}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
 
+                {/* Quick links (permission-aware) */}
                 <div className="py-2">
                   {[
-                    [
-                      "/settings/preferences",
-                      "Settings",
-                      "Profile Settings",
-                      null,
-                    ],
+                    ["/settings/profile", "User", "My Profile", null],
                     [
                       "/settings/preferences",
                       "SlidersHorizontal",
                       "Preferences",
                       "settings.preferences",
+                    ],
+                    [
+                      "/settings/user-management",
+                      "Users",
+                      "User Management",
+                      "settings.user",
+                    ],
+                    [
+                      "/settings/role-permissions",
+                      "ShieldCheck",
+                      "Role Permissions",
+                      "settings.role",
+                    ],
+                    [
+                      "/settings/audit-logs",
+                      "ClipboardList",
+                      "Audit Logs",
+                      "audit.read",
                     ],
                     ["/help", "HelpCircle", "Help & Support", null],
                   ]
@@ -380,8 +422,7 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
                         key={to}
                         to={to}
                         className="flex w-full items-center gap-2 rounded-md px-4 py-2 text-left text-sm transition-colors hover:bg-emerald-700 hover:text-white">
-                        <Icon name={icon} size={16} />
-                        {label}
+                        <Icon name={icon} size={16} /> {label}
                       </Link>
                     ))}
                 </div>
@@ -390,8 +431,7 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
                   <button
                     onClick={handleSignOut}
                     className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
-                    <Icon name="LogOut" size={16} />
-                    Sign Out
+                    <Icon name="LogOut" size={16} /> Sign Out
                   </button>
                 </div>
               </div>
