@@ -1,4 +1,4 @@
-// src/modules/patients/patientRoutes.js
+// ESM
 import { Router } from "express";
 import { requireAuth } from "#middlewares/requireAuth.js";
 import { permit } from "#middlewares/rbac.js";
@@ -7,44 +7,31 @@ import * as ctrl from "./patientController.js";
 import {
   createPatientSchema,
   updatePatientSchema,
-  searchPatientsSchema,
+  listPatientsSchema,
 } from "./schemas.js";
 
 const router = Router();
 
-// All patient endpoints need auth
 router.use(requireAuth);
 
-// Search/list
 router.get(
   "/",
-  permit("patient.read"),
-  validate(searchPatientsSchema),
-  ctrl.search
+  permit("patients:read"),
+  validate(listPatientsSchema),
+  ctrl.list
 );
-router.get(
-  "/search",
-  permit("patient.read"),
-  validate(searchPatientsSchema),
-  ctrl.search
-);
-
-// CRUD
 router.post(
   "/",
-  permit("patient.write"),
+  permit("patients:create"),
   validate(createPatientSchema),
   ctrl.create
 );
-router.get("/:id", permit("patient.read"), ctrl.getById);
+router.get("/:id", permit("patients:read"), ctrl.getOne);
 router.patch(
   "/:id",
-  permit("patient.write"),
+  permit("patients:update"),
   validate(updatePatientSchema),
   ctrl.update
 );
-
-// Docs (stub ok)
-router.post("/:id/documents", permit("patient.write"), ctrl.uploadDoc);
 
 export default router;

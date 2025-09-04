@@ -1,9 +1,10 @@
-import { api } from "@/services/baseApi";
+import { api } from "./baseApi";
 
 export const patientsApi = api.injectEndpoints({
   endpoints: (build) => ({
-    searchPatients: build.query({
-      query: (params) => ({ url: "/patients/search", params }),
+    // GET /patients?search=&gender=&status=&sort=&page=&limit=
+    listPatients: build.query({
+      query: (params = {}) => ({ url: "/patients", params }),
       providesTags: (res) =>
         res?.items
           ? [
@@ -12,28 +13,36 @@ export const patientsApi = api.injectEndpoints({
             ]
           : [{ type: "Patient", id: "LIST" }],
     }),
+
+    // GET /patients/:id
     getPatient: build.query({
-      query: (id) => `/patients/${id}`,
-      providesTags: (res, err, id) => [{ type: "Patient", id }],
+      query: (id) => ({ url: `/patients/${id}` }),
+      providesTags: (_res, _err, id) => [{ type: "Patient", id }],
     }),
+
+    // POST /patients (MRN is auto-generated server-side)
     createPatient: build.mutation({
       query: (body) => ({ url: "/patients", method: "POST", body }),
       invalidatesTags: [{ type: "Patient", id: "LIST" }],
     }),
+
+    // PATCH /patients/:id
     updatePatient: build.mutation({
       query: ({ id, ...body }) => ({
         url: `/patients/${id}`,
         method: "PATCH",
         body,
       }),
-      invalidatesTags: (res, err, { id }) => [{ type: "Patient", id }],
+      invalidatesTags: (_r, _e, arg) => [
+        { type: "Patient", id: arg.id },
+        { type: "Patient", id: "LIST" },
+      ],
     }),
   }),
-  overrideExisting: false,
 });
 
 export const {
-  useSearchPatientsQuery,
+  useListPatientsQuery,
   useGetPatientQuery,
   useCreatePatientMutation,
   useUpdatePatientMutation,

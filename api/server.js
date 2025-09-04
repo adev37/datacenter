@@ -1,4 +1,5 @@
-// server.js (ESM, no relative paths)
+// api/server.js
+// ESM, no relative paths
 
 import "dotenv/config";
 import http from "http";

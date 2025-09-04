@@ -1,103 +1,57 @@
-// src/modules/patients/schemas.js
+// ESM
 import { z } from "zod";
 
-const dobLike = z
-  .string()
-  .trim()
-  .refine((v) => v.length === 10 || /\d{4}-\d{2}-\d{2}T/.test(v), {
-    message: "dob must be YYYY-MM-DD or ISO datetime",
-  });
+const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 
 export const createPatientSchema = z.object({
   body: z.object({
-    mrn: z.string().trim().min(1).optional(), // auto if missing
-    name: z.object({
-      first: z.string().trim().min(1),
-      middle: z.string().trim().optional(),
-      last: z.string().trim().optional(),
-      full: z.string().trim().optional(),
-    }),
-    dob: dobLike.optional(),
-    sex: z.enum(["M", "F", "O", "U"]).optional(),
-    phones: z.array(z.string().trim()).optional(),
+    firstName: z.string().trim().min(1),
+    middleName: z.string().trim().optional().default(""),
+    lastName: z.string().trim().min(1),
+    dob: z.coerce.date(),
+    gender: z.enum(["Male", "Female", "Other"]),
+    maritalStatus: z.string().optional(),
+    phone: z.string().optional(),
     email: z.string().email().optional(),
-    addresses: z
-      .array(
-        z.object({
-          line1: z.string().trim().optional(),
-          line2: z.string().trim().optional(),
-          city: z.string().trim().optional(),
-          state: z.string().trim().optional(),
-          postalCode: z.string().trim().optional(),
-          country: z.string().trim().optional(),
-        })
-      )
+    address: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    zip: z.string().optional(),
+    photoUrl: z.string().url().optional(),
+    insurance: z
+      .object({
+        provider: z.string().optional(),
+        plan: z.string().optional(),
+        policyNo: z.string().optional(),
+        coverage: z.string().optional(),
+      })
       .optional(),
-    alerts: z.array(z.string().trim()).optional(),
-    consents: z
-      .array(
-        z.object({
-          type: z.string().trim(),
-          givenAt: z.string().trim().optional(), // service parses
-          by: z.string().trim().optional(),
-        })
-      )
+    emergency: z
+      .object({
+        name: z.string().optional(),
+        relationship: z.string().optional(),
+        phone: z.string().optional(),
+      })
       .optional(),
   }),
 });
 
 export const updatePatientSchema = z.object({
-  params: z.object({ id: z.string().min(1) }),
-  body: z.object({
-    name: z
-      .object({
-        first: z.string().trim().optional(),
-        middle: z.string().trim().optional(),
-        last: z.string().trim().optional(),
-        full: z.string().trim().optional(),
-      })
-      .optional(),
-    dob: dobLike.optional(),
-    sex: z.enum(["M", "F", "O", "U"]).optional(),
-    phones: z.array(z.string().trim()).optional(),
-    email: z.string().email().optional(),
-    addresses: z
-      .array(
-        z.object({
-          line1: z.string().trim().optional(),
-          line2: z.string().trim().optional(),
-          city: z.string().trim().optional(),
-          state: z.string().trim().optional(),
-          postalCode: z.string().trim().optional(),
-          country: z.string().trim().optional(),
-        })
-      )
-      .optional(),
-    alerts: z.array(z.string().trim()).optional(),
-    consents: z
-      .array(
-        z.object({
-          type: z.string().trim(),
-          givenAt: z.string().trim().optional(),
-          by: z.string().trim().optional(),
-        })
-      )
-      .optional(),
+  params: z.object({ id: objectId }),
+  body: createPatientSchema.shape.body.partial().extend({
+    status: z.enum(["active", "inactive", "deceased"]).optional(),
+    mrn: z.string().optional(),
+    isDeleted: z.boolean().optional(),
   }),
 });
 
-export const searchPatientsSchema = z.object({
-  query: z
-    .object({
-      q: z.string().trim().optional(),
-      mrn: z.string().trim().optional(),
-      phone: z.string().trim().optional(),
-      dob: z.string().trim().optional(),
-      page: z.coerce.number().int().positive().optional(),
-      limit: z.coerce.number().int().positive().max(100).optional(),
-      scope: z.enum(["all"]).optional(), // SUPER_ADMIN only
-    })
-    .refine((v) => Boolean(v.q || v.mrn || v.phone || v.dob), {
-      message: "Provide q, mrn, phone or dob for search",
-    }),
+export const listPatientsSchema = z.object({
+  query: z.object({
+    search: z.string().optional(),
+    gender: z.enum(["Male", "Female", "Other"]).optional(),
+    status: z.enum(["active", "inactive", "deceased"]).optional(),
+    sort: z.enum(["name", "mrn", "lastVisit"]).optional().default("name"),
+    page: z.coerce.number().int().positive().optional().default(1),
+    limit: z.coerce.number().int().positive().max(100).optional().default(10),
+  }),
 });

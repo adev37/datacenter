@@ -1,48 +1,83 @@
-// src/modules/patients/patientController.js
-import * as service from "./patientService.js";
-import { asyncHandler } from "#utils/asyncHandler.js";
+// ESM
+import * as svc from "./patientService.js";
 
-// GET /patients or /patients/search
-export const search = asyncHandler(async (req, res) => {
-  const data = await service.searchPatients({
-    query: req.query,
-    user: req.user,
-    ctx: req.ctx,
-  });
-  res.json(data);
-});
+function resolveBranchId(req) {
+  // Admin can switch branches via header; others must send X-Branch-Id pre-set in req.ctx
+  const isAdmin = req.user?.roles?.includes("Admin");
+  const headerBranch = req.get("x-branch-id");
+  if (isAdmin && headerBranch) return headerBranch;
+  const branchId = req.ctx?.branchId;
+  if (!branchId) {
+    const e = new Error("Branch context required");
+    e.status = 400;
+    throw e;
+  }
+  return branchId;
+}
 
-// POST /patients
-export const create = asyncHandler(async (req, res) => {
-  const patient = await service.createPatient({
-    body: req.body,
-    user: req.user,
-    ctx: req.ctx,
-    audit: req.audit,
-  });
-  res.status(201).json(patient);
-});
+export const create = async (req, res, next) => {
+  try {
+    const branchId = resolveBranchId(req);
+    const patient = await svc.createPatient({ branchId, data: req.body });
+    req.audit?.log?.("patient.create", { patientId: patient._id, branchId });
+    res.status(201).json(patient);
+  } catch (e) {
+    next(e);
+  }
+};
 
-// GET /patients/:id
-export const getById = asyncHandler(async (req, res) => {
-  const patient = await service.getPatient({ id: req.params.id });
-  if (!patient) return res.status(404).json({ message: "Patient not found" });
-  res.json(patient);
-});
+export const update = async (req, res, next) => {
+  try {
+    const branchId = resolveBranchId(req);
+    const { id } = req.params;
+    const patient = await svc.updatePatient({ branchId, id, data: req.body });
+    if (!patient) return res.status(404).json({ message: "Patient not found" });
+    req.audit?.log?.("patient.update", { patientId: id, branchId });
+    res.json(patient);
+  } catch (e) {
+    next(e);
+  }
+};
 
-// PATCH /patients/:id
-export const update = asyncHandler(async (req, res) => {
-  const patient = await service.updatePatient({
-    id: req.params.id,
-    body: req.body,
-    user: req.user,
-  });
-  if (!patient) return res.status(404).json({ message: "Patient not found" });
-  res.json(patient);
-});
+export const getOne = async (req, res, next) => {
+  try {
+    const branchId = resolveBranchId(req);
+    const { id } = req.params;
+    const patient = await svc.getPatient({ branchId, id });
+    if (!patient) return res.status(404).json({ message: "Patient not found" });
+    res.json(patient);
+  } catch (e) {
+    next(e);
+  }
+};
 
-// POST /patients/:id/documents (placeholder -> integrate storage later)
-export const uploadDoc = asyncHandler(async (_req, res) => {
-  // Hand off to modules/documents/storageService.js when ready
-  res.status(201).json({ ok: true });
-});
+export const list = async (req, res, next) => {
+  try {
+    const branchId = resolveBranchId(req);
+    const {
+      search,
+      gender,
+      status,
+      sort = "name",
+      page = 1,
+      limit = 10,
+    } = req.query;
+    const result = await svc.listPatients({
+      branchId,
+      search,
+      gender,
+      status,
+      sort,
+      page: Number(page),
+      limit: Number(limit),
+    });
+    res.json({
+      total: result.total,
+      page: Number(page),
+      limit: Number(limit),
+      items: result.items,
+    });
+  } catch (e) {
+    next(e);
+  }
+};

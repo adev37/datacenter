@@ -1,4 +1,5 @@
-// src/modules/roles/permissions.js (ESM)
+// api/src/modules/roles/permissions.js
+// ESM
 
 // ------------------------------------------------------------
 // Single source of truth for permission keys across the system
@@ -37,7 +38,7 @@ export const PERMS = {
 
   // ── Lab ────────────────────────────────────────────────────────────────────
   LAB_ORDER: "lab.order",
-  LAB_RESULT: "lab.result", // also used for sample collection page
+  LAB_RESULT: "lab.result",
 
   // ── Radiology ──────────────────────────────────────────────────────────────
   RAD_ORDER: "rad.order",
@@ -49,21 +50,21 @@ export const PERMS = {
 
   // ── IPD (In-Patient Dept) ─────────────────────────────────────────────────
   IPD_ADMIT: "ipd.admit",
-  IPD_TRANSFER: "ipd.transfer", // reserved (not currently routed)
-  IPD_DISCHARGE: "ipd.discharge", // reserved (not currently routed)
+  IPD_TRANSFER: "ipd.transfer",
+  IPD_DISCHARGE: "ipd.discharge",
 
   // ── Billing ────────────────────────────────────────────────────────────────
   BILLING_INVOICE: "billing.invoice",
   BILLING_PAYMENT: "billing.payment",
-  BILLING_REFUND: "billing.refund", // reserved/optional
+  BILLING_REFUND: "billing.refund",
 
   // ── Inventory ─────────────────────────────────────────────────────────────
   INV_ITEM: "inv.item",
   INV_GRN: "inv.grn",
   INV_TRANSFER: "inv.transfer",
   INV_LEDGER: "inv.ledger",
-  INV_ADJUST: "inv.adjust", // reserved/optional
-  CSSD_WRITE: "cssd.write", // reserved/optional
+  INV_ADJUST: "inv.adjust",
+  CSSD_WRITE: "cssd.write",
 
   // ── Reports / Staff / Notifications (guards for future/extra pages) ───────
   REPORTS_FINANCE: "reports.finance",

@@ -1,4 +1,6 @@
-// src/modules/users/userModel.js
+// api/src/modules/users/userModel.js
+// ESM
+
 import mongoose from "mongoose";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19,7 +21,7 @@ const UserSchema = new mongoose.Schema(
     },
     name: { type: String },
 
-    // ✅ normalize empty -> undefined so it won't hit the unique index
+    // Normalize empty -> undefined so it won't hit the unique index
     phone: {
       type: String,
       trim: true,
@@ -28,11 +30,13 @@ const UserSchema = new mongoose.Schema(
     },
 
     passwordHash: { type: String, default: "" },
-    roles: [{ type: String }],
-    branches: [{ type: String }],
-    permissions: [{ type: String, default: [] }],
 
-    // optional profile fields your UI is editing
+    // RBAC
+    roles: [{ type: String }], // e.g. ["ADMIN"], ["DOCTOR"], etc.
+    branches: [{ type: String }], // e.g. ["BR0001"]
+    permissions: [{ type: String, default: [] }], // user-specific overrides
+
+    // Optional profile fields your UI is editing
     title: { type: String, trim: true },
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
@@ -44,14 +48,14 @@ const UserSchema = new mongoose.Schema(
       tz: { type: String, default: "Asia/Kolkata" },
     },
 
-    // avatar fields written by the upload endpoint
+    // Avatar fields written by the upload endpoint
     avatarUrl: { type: String, default: "" }, // e.g. "/uploads/avatars/xxx.png"
     avatarPath: { type: String, default: "" }, // e.g. "uploads/avatars/xxx.png"
   },
   { timestamps: true }
 );
 
-// ✅ keep the DB index aligned with the new behavior
+// Keep the DB index aligned with the behavior above
 UserSchema.index(
   { phone: 1 },
   {

@@ -1,5 +1,5 @@
-// src/modules/users/userService.js (ESM)
-// Auth service: register() + login()
+// api/src/modules/users/userService.js
+// ESM
 
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -10,9 +10,13 @@ import {
   normalizeEmail,
 } from "#modules/users/userRepository.js";
 
+// ─────────────────────────────────────────────────────────────
+// Validation schemas
+// ─────────────────────────────────────────────────────────────
 const emailSchema = z
   .string({ required_error: "Email is required" })
   .email("Email format is invalid");
+
 const passwordSchema = z
   .string({ required_error: "Password is required" })
   .min(6, "Password must be at least 6 characters");
@@ -30,6 +34,9 @@ const loginSchema = z.object({
   password: z.string({ required_error: "Password is required" }),
 });
 
+// ─────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────
 export async function register(input) {
   const {
     email,
@@ -73,6 +80,9 @@ export async function login(input) {
   return toAuthToken(user);
 }
 
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
 function toAuthToken(user) {
   const payload = {
     sub: String(user._id),

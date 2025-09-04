@@ -1,76 +1,72 @@
+// ESM
 import mongoose from "mongoose";
-const { Schema } = mongoose;
 
-const NameSchema = new Schema(
+const PatientSchema = new mongoose.Schema(
   {
-    first: { type: String, trim: true },
-    middle: { type: String, trim: true },
-    last: { type: String, trim: true },
-    full: { type: String, trim: true },
-  },
-  { _id: false }
-);
-
-const AddressSchema = new Schema(
-  {
-    line1: { type: String, trim: true },
-    line2: { type: String, trim: true },
-    city: { type: String, trim: true },
-    state: { type: String, trim: true },
-    postalCode: { type: String, trim: true },
-    country: { type: String, trim: true },
-  },
-  { _id: false }
-);
-
-const ConsentSchema = new Schema(
-  {
-    type: { type: String, trim: true },
-    givenAt: { type: Date },
-    by: { type: String, trim: true },
-  },
-  { _id: false }
-);
-
-const PatientSchema = new Schema(
-  {
-    mrn: { type: String, required: true, unique: true, index: true },
     branchId: {
-      type: Schema.Types.ObjectId,
+      type: mongoose.Types.ObjectId,
       ref: "Branch",
+      index: true,
       required: true,
+    },
+
+    mrn: { type: String, unique: true, sparse: true, index: true },
+    status: {
+      type: String,
+      enum: ["active", "inactive", "deceased"],
+      default: "active",
       index: true,
     },
 
-    name: { type: NameSchema, default: {} },
-    dob: { type: Date },
-    sex: { type: String, enum: ["M", "F", "O", "U"], default: "U" },
+    firstName: { type: String, required: true, trim: true },
+    middleName: { type: String, trim: true },
+    lastName: { type: String, required: true, trim: true },
 
-    phones: [{ type: String, trim: true }],
-    email: { type: String, trim: true },
-    addresses: [AddressSchema],
-    alerts: [{ type: String, trim: true }],
-    consents: [ConsentSchema],
+    dob: { type: Date, required: true },
+    gender: { type: String, enum: ["Male", "Female", "Other"], required: true },
+    maritalStatus: { type: String },
 
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
-    updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    phone: { type: String, index: true },
+    email: { type: String, lowercase: true, trim: true, index: true },
+
+    address: String,
+    city: String,
+    state: String,
+    zip: String,
+
+    photoUrl: String,
+
+    insurance: {
+      provider: String,
+      plan: String,
+      policyNo: String,
+      coverage: String,
+    },
+
+    emergency: {
+      name: String,
+      relationship: String,
+      phone: String,
+    },
+
+    isDeleted: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
 );
 
-// Sort-heavy views by branch + time
-PatientSchema.index({ branchId: 1, createdAt: -1 });
-PatientSchema.index({ "name.full": 1 });
-
-// Auto-build full name if not provided
-PatientSchema.pre("save", function (next) {
-  if (this.name) {
-    const parts = [this.name.first, this.name.middle, this.name.last].filter(
-      Boolean
-    );
-    if (!this.name.full) this.name.full = parts.join(" ").trim();
+PatientSchema.index(
+  {
+    mrn: "text",
+    firstName: "text",
+    lastName: "text",
+    phone: "text",
+    email: "text",
+  },
+  {
+    name: "patient_text_idx",
+    default_language: "none",
+    weights: { mrn: 5, lastName: 4, firstName: 3 },
   }
-  next();
-});
+);
 
 export default mongoose.model("Patient", PatientSchema);

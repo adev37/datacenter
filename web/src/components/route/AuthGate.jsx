@@ -8,28 +8,21 @@ import { API_BASE } from "@/services/apiClient";
 
 /**
  * Hydrates Redux from localStorage and bootstraps OrgProvider.
+ * (Removed unused orgBootstrap state; behavior unchanged.)
  */
 export default function AuthGate({ children }) {
   const [ready, setReady] = useState(false);
-  const [orgBootstrap, setOrgBootstrap] = useState({
-    user: null,
-    hospitals: [],
-    activeHospitalId: null,
-  });
   const dispatch = useDispatch();
 
   useEffect(() => {
     (async () => {
       const persisted = loadAuth(); // { token, user, branchId }
       if (persisted) {
-        // Hydrate redux
+        // Hydrate redux from persisted snapshot
         dispatch(setAuth({ token: persisted.token, user: persisted.user }));
         if (persisted.branchId) dispatch(setBranch(persisted.branchId));
 
-        // Build bootstrap object
-        let user = persisted.user || null;
-
-        // Refresh user/permissions snapshot if we have a token
+        // Best-effort refresh of /auth/me to get current roles/perms
         if (persisted.token) {
           try {
             const res = await fetch(`${API_BASE}/auth/me`, {
@@ -38,25 +31,16 @@ export default function AuthGate({ children }) {
             });
             if (res.ok) {
               const me = await res.json(); // { user, permissions }
-              if (me?.user) user = me.user;
+              if (me?.user) {
+                // Update redux with the freshest user snapshot
+                dispatch(setAuth({ token: persisted.token, user: me.user }));
+                if (persisted.branchId) dispatch(setBranch(persisted.branchId));
+              }
             }
           } catch {
-            // ignore; fall back to persisted
+            // ignore network/refresh issues; fall back to persisted
           }
         }
-
-        // Normalize branches to hospitals [{id, name}]
-        const hospitals = Array.isArray(user?.branches)
-          ? user.branches.map((id) => ({
-              id: String(id),
-              name: `Branch ${id}`,
-            }))
-          : [];
-
-        const activeHospitalId =
-          persisted.branchId || (hospitals[0] ? hospitals[0].id : null);
-
-        setOrgBootstrap({ user, hospitals, activeHospitalId });
       }
       setReady(true);
     })();

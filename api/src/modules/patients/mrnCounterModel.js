@@ -1,4 +1,4 @@
-// src/modules/patients/mrnCounterModel.js
+// ESM
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 

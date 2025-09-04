@@ -1,4 +1,6 @@
-// src/scripts/seedRoles.js (ESM)
+// api/src/scripts/seedRoles.js
+// ESM
+
 import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
@@ -22,8 +24,16 @@ async function main() {
     User.collection.createIndex({ email: 1 }, { unique: true }),
   ]);
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Canonical roles
+  //  - SUPER_ADMIN: GLOBAL (full platform)
+  //  - ADMIN: BRANCH (single PHC)
+  //  - Staff roles: BRANCH
+  //  - IT: BRANCH  ✅ (as per Option B)
+  // ───────────────────────────────────────────────────────────────────────────
   const ROLE = {
     SUPER_ADMIN: { scope: "GLOBAL", permissions: Object.values(PERMS) },
+
     ADMIN: {
       scope: "BRANCH",
       permissions: [
@@ -70,6 +80,7 @@ async function main() {
         PERMS.NOTIFICATIONS_READ,
       ],
     },
+
     DOCTOR: {
       scope: "BRANCH",
       permissions: [
@@ -84,6 +95,7 @@ async function main() {
         PERMS.REPORTS_CLINICAL,
       ],
     },
+
     NURSE: {
       scope: "BRANCH",
       permissions: [
@@ -95,6 +107,7 @@ async function main() {
         PERMS.IPD_ADMIT,
       ],
     },
+
     FRONT_DESK: {
       scope: "BRANCH",
       permissions: [
@@ -106,6 +119,7 @@ async function main() {
         PERMS.NOTIFICATIONS_READ,
       ],
     },
+
     PHARMACY: {
       scope: "BRANCH",
       permissions: [
@@ -115,6 +129,7 @@ async function main() {
         PERMS.BILLING_PAYMENT,
       ],
     },
+
     LAB: {
       scope: "BRANCH",
       permissions: [
@@ -124,6 +139,7 @@ async function main() {
         PERMS.REPORTS_CLINICAL,
       ],
     },
+
     RADIOLOGY: {
       scope: "BRANCH",
       permissions: [
@@ -133,6 +149,7 @@ async function main() {
         PERMS.REPORTS_CLINICAL,
       ],
     },
+
     CASHIER: {
       scope: "BRANCH",
       permissions: [
@@ -142,6 +159,7 @@ async function main() {
         PERMS.NOTIFICATIONS_READ,
       ],
     },
+
     INVENTORY: {
       scope: "BRANCH",
       permissions: [
@@ -153,8 +171,10 @@ async function main() {
         PERMS.REPORTS_INVENTORY,
       ],
     },
+
+    // ✅ IT is now BRANCH-scoped (local technician per PHC)
     IT: {
-      scope: "GLOBAL",
+      scope: "BRANCH",
       permissions: [
         PERMS.FILE_UPLOAD,
         PERMS.FILE_READ,
@@ -163,6 +183,7 @@ async function main() {
         PERMS.AUDIT_READ,
       ],
     },
+
     HOUSEKEEPING: { scope: "BRANCH", permissions: [] },
   };
 
@@ -178,6 +199,7 @@ async function main() {
   await Role.bulkWrite(roleOps);
   console.log("[seed] Roles upserted:", Object.keys(ROLE).length);
 
+  // Bootstrap Super Admin
   const email = "super@admin.local";
   const defaultPassword = "ChangeMe123!";
 

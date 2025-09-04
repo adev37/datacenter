@@ -1,11 +1,13 @@
-// src/middlewares/rbac.js (ESM)
+// api/src/middlewares/rbac.js
+// ESM
 
 import { Role } from "#modules/roles/roleModel.js";
 import { User } from "#modules/users/userModel.js";
 
-// roleName -> { permissions:Set, scope }
+// In-memory cache: roleName -> { permissions:Set<string>, scope:"GLOBAL"|"BRANCH" }
 const roleCache = new Map();
 
+/** Load role definition with a tiny cache. */
 async function getRole(name) {
   if (!name) return { permissions: new Set(), scope: "BRANCH" };
   if (roleCache.has(name)) return roleCache.get(name);
@@ -19,25 +21,29 @@ async function getRole(name) {
   return val;
 }
 
+/** Clear the cached entry for a role (or everything if no name). */
 export function clearRoleCache(name) {
   if (name) roleCache.delete(name);
   else roleCache.clear();
 }
 
 /**
- * Usage: router.get("/path", permit("patient.read"), handler)
- * Multiple perms => user must have all of them.
+ * RBAC gate.
+ * Usage:
+ *   router.get("/path", requireAuth, permit("patient.read","encounter.write"), handler)
+ * All listed permissions must be granted.
  */
 export function permit(...required) {
-  const needs = required.filter((v) => typeof v === "string" && v.length > 0);
+  const needs = required.filter((p) => typeof p === "string" && p.length > 0);
 
   return async (req, res, next) => {
     try {
+      // 0) Must be authenticated (requireAuth should run earlier; still safe-check)
       const tokenUser = req.user;
       if (!tokenUser)
         return res.status(401).json({ message: "Unauthenticated" });
 
-      // Load a fresh snapshot of the user from DB to avoid stale JWT roles/branches.
+      // 1) Fetch a fresh user snapshot to avoid stale JWT roles/branches
       const liveUser = await User.findById(tokenUser.sub)
         .select("roles branches permissions")
         .lean();
@@ -48,23 +54,24 @@ export function permit(...required) {
       const roles = Array.isArray(liveUser.roles) ? liveUser.roles : [];
       const isSuper = roles.includes("SUPER_ADMIN");
 
-      // 1) SUPER_ADMIN can do everything everywhere
+      // 2) SUPER_ADMIN bypass: full access, all branches
       if (isSuper) return next();
 
-      // 2) Resolve roles and merge role permissions
+      // 3) Resolve role definitions and aggregate permissions
       const roleDefs = await Promise.all(roles.map(getRole));
+
       const perms = new Set();
       for (const r of roleDefs) for (const p of r.permissions) perms.add(p);
 
-      // 3) Merge user-specific permissions (overrides)
+      // 4) Merge user-specific overrides
       (liveUser.permissions || []).forEach((p) => perms.add(p));
 
-      // 4) Scope checks
+      // 5) Scope enforcement
       const hasGlobalRole = roleDefs.some((r) => r.scope === "GLOBAL");
 
-      // If the user does NOT have any GLOBAL role, they must:
-      //  - send X-Branch-Id
-      //  - have access to that branch (be assigned to it)
+      // If user does NOT have any GLOBAL-scoped role:
+      //   - require X-Branch-Id header
+      //   - require membership in that branch
       if (!hasGlobalRole) {
         const branchId = req.ctx?.branchId;
         if (!branchId) {
@@ -80,7 +87,7 @@ export function permit(...required) {
         }
       }
 
-      // 5) Permission check
+      // 6) Permission check (all required must be present)
       if (needs.length && !needs.every((p) => perms.has(p))) {
         return res.status(403).json({ message: "Forbidden" });
       }
@@ -92,5 +99,5 @@ export function permit(...required) {
   };
 }
 
-// keep alias
+// Friendly alias
 export const rbac = permit;

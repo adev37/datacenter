@@ -1,4 +1,6 @@
-// src/modules/users/userRoutes.js
+// api/src/modules/users/userRoutes.js
+// ESM
+
 import { Router } from "express";
 import { requireAuth } from "#middlewares/requireAuth.js";
 import { permit } from "#middlewares/rbac.js";
@@ -14,13 +16,13 @@ import {
 
 const r = Router();
 
-/* ───────────────  Self profile  ─────────────── */
+/* ─────────────────────────  Self profile  ───────────────────────── */
 r.get("/me", requireAuth, getMe);
 r.patch("/me", requireAuth, updateMe);
 r.put("/me", requireAuth, updateMe);
 r.post("/me/avatar", requireAuth, avatarUpload, uploadAvatar);
 
-/* ───────────────  Provisioned users  ─────────────── */
+/* ───────────────────────  Provisioned users  ────────────────────── */
 r.post("/", requireAuth, permit(PERMS.USER_WRITE), async (req, res, next) => {
   try {
     const { register } = await import("#modules/users/userService.js");
@@ -51,7 +53,7 @@ r.post("/", requireAuth, permit(PERMS.USER_WRITE), async (req, res, next) => {
       }
       inputBranches = [branchId];
 
-      // Only BRANCH-scoped roles
+      // Only BRANCH-scoped roles are assignable by Admin
       const roleDocs = await Role.find({ name: { $in: inputRoles } })
         .select("name scope")
         .lean();
@@ -109,7 +111,7 @@ r.post("/", requireAuth, permit(PERMS.USER_WRITE), async (req, res, next) => {
   }
 });
 
-/* ───────────────  Listing  ─────────────── */
+/* ───────────────────────────  Listing  ──────────────────────────── */
 r.get("/", requireAuth, permit(PERMS.USER_READ), async (req, res, next) => {
   try {
     const requester = await User.findById(req.user.sub).select("roles").lean();
@@ -132,7 +134,7 @@ r.get("/", requireAuth, permit(PERMS.USER_READ), async (req, res, next) => {
   }
 });
 
-/* ───────────────  Extra permissions  ─────────────── */
+/* ─────────────────────  Extra permissions (R/W)  ─────────────────── */
 r.get(
   "/:id/permissions",
   requireAuth,

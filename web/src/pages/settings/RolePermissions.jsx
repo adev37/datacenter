@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+// apps/web/src/pages/settings/RolePermissions.jsx
+import React, { useMemo, useState, useEffect } from "react";
 import { useListRolesQuery, useUpsertRoleMutation } from "@/services/roles.api";
-import { useMeQuery } from "@/services/auth.api"; // 👈 get logged-in roles
+import { useMeQuery } from "@/services/auth.api";
 import { apiErrorMessage } from "@/utils/apiError";
 import { skipToken } from "@reduxjs/toolkit/query";
 import { useSelector } from "react-redux";
@@ -14,34 +15,45 @@ export default function RolePermissions() {
   const { data: me } = useMeQuery(token ? undefined : skipToken);
   const isSuper = (me?.user?.roles || []).includes("SUPER_ADMIN");
 
-  const roleNames = useMemo(() => roles.map((r) => r.name), [roles]);
+  // Hide SUPER_ADMIN from the list for non-super users (UX guard)
+  const visibleRoles = useMemo(
+    () => (isSuper ? roles : roles.filter((r) => r.name !== "SUPER_ADMIN")),
+    [roles, isSuper]
+  );
+
+  const roleNames = useMemo(
+    () => visibleRoles.map((r) => r.name),
+    [visibleRoles]
+  );
+
   const [active, setActive] = useState(roleNames[0] || "ADMIN");
 
-  const activeRole = useMemo(
-    () =>
-      roles.find((r) => r.name === active) || {
+  const activeRole = useMemo(() => {
+    const found = visibleRoles.find((r) => r.name === active);
+    return (
+      found || {
         name: active,
         permissions: [],
         scope: "BRANCH",
-      },
-    [roles, active]
-  );
+      }
+    );
+  }, [visibleRoles, active]);
 
   const [scope, setScope] = useState(activeRole.scope);
   const [permText, setPermText] = useState(
     (activeRole.permissions || []).join("\n")
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     setScope(activeRole.scope || "BRANCH");
     setPermText((activeRole.permissions || []).join("\n"));
   }, [activeRole]);
 
   // 🔒 Only SUPER_ADMIN can change any role's scope.
-  //    Branch admins can edit permissions but the scope control is disabled.
+  //    Also prevent scope changes on SUPER_ADMIN role itself.
   const scopeDisabled = !isSuper || activeRole.name === "SUPER_ADMIN";
 
-  // Optional: block non-super from editing the SUPER_ADMIN role entirely.
+  // Optional: non-super cannot edit SUPER_ADMIN at all (and we hide it anyway)
   const formDisabled = !isSuper && activeRole.name === "SUPER_ADMIN";
 
   const onSave = async (e) => {
@@ -55,7 +67,7 @@ export default function RolePermissions() {
 
     await upsertRole({
       name: activeRole.name,
-      scope: scope, // backend will ignore this if not SUPER_ADMIN
+      scope, // backend ignores scope unless SUPER_ADMIN
       permissions,
     }).unwrap();
 
@@ -102,6 +114,7 @@ export default function RolePermissions() {
                   className="mt-1 w-full border rounded px-3 py-2 bg-gray-50"
                 />
               </div>
+
               <div>
                 <label className="text-sm text-gray-600">
                   Scope{" "}
@@ -119,6 +132,12 @@ export default function RolePermissions() {
                   <option value="BRANCH">BRANCH</option>
                   <option value="GLOBAL">GLOBAL</option>
                 </select>
+                {/* Optional helper note: IT should be BRANCH-scoped per policy */}
+                {activeRole.name === "IT" && (
+                  <p className="mt-1 text-xs text-emerald-700">
+                    Note: IT is branch-scoped in our policy.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -127,10 +146,10 @@ export default function RolePermissions() {
                 Permissions (one per line)
               </label>
               <textarea
-                className="mt-1 w-full border rounded px-3 py-2 font-mono min-H-[240px]"
+                className="mt-1 w-full border rounded px-3 py-2 font-mono min-h-[240px]"
                 value={permText}
                 onChange={(e) => setPermText(e.target.value)}
-                placeholder="user.read&#10;patient.write&#10;billing.invoice"
+                placeholder={"user.read\npatient.write\nbilling.invoice"}
                 disabled={formDisabled}
               />
               {!isSuper && activeRole.name === "SUPER_ADMIN" && (

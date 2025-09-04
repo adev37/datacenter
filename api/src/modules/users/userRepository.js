@@ -1,4 +1,5 @@
-// src/modules/users/userRepository.js (ESM)
+// api/src/modules/users/userRepository.js
+// ESM
 
 import { User } from "#modules/users/userModel.js";
 

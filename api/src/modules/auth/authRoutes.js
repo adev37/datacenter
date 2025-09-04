@@ -1,4 +1,5 @@
-// src/modules/auth/authRoutes.js (ESM)
+// api/src/modules/auth/authRoutes.js
+// ESM
 
 import { Router } from "express";
 import { requireAuth } from "#middlewares/requireAuth.js";
@@ -8,10 +9,13 @@ import { PERMS } from "#permissions";
 
 const r = Router();
 
-// Public login only
+/**
+ * POST /api/v1/auth/login
+ * Public login → returns { accessToken, user:{ id,email,roles,branches } }
+ */
 r.post("/login", async (req, res, next) => {
-  // delegate to users service via controller (you had this split before)
   try {
+    // delegate to users service (keeps concerns separated)
     const { login } = await import("#modules/users/userService.js");
     const out = await login(req.body);
     res.json(out);
@@ -20,7 +24,12 @@ r.post("/login", async (req, res, next) => {
   }
 });
 
-// Current session details with effective permissions
+/**
+ * GET /api/v1/auth/me
+ * Return session’s effective permissions and basic user info.
+ * - SUPER_ADMIN → returns ALL permissions
+ * - Others → union of role permissions + user-specific overrides
+ */
 r.get("/me", requireAuth, async (req, res, next) => {
   try {
     const udoc = await User.findById(req.user.sub)

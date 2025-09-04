@@ -1,4 +1,6 @@
+// api/src/middlewares/upload.js
 // ESM
+
 import multer from "multer";
 import path from "node:path";
 import fs from "node:fs";
@@ -7,7 +9,7 @@ const root = process.cwd();
 const uploadRoot = path.join(root, "uploads");
 const avatarDir = path.join(uploadRoot, "avatars");
 
-// ensure folders exist
+// Ensure folders exist
 for (const dir of [uploadRoot, avatarDir]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }

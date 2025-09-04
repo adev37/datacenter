@@ -17,27 +17,22 @@ export default function CreateUser() {
   const { data: me } = useMeQuery(token ? undefined : skipToken);
   const myRoles = me?.user?.roles || [];
   const isSuper = myRoles.includes("SUPER_ADMIN");
-  const isBranchAdmin = myRoles.includes("ADMIN");
 
   // Roles from server (with scope info)
   const { data: roles = [], isFetching: rolesLoading } = useListRolesQuery();
 
-  // Hide roles we don't want exposed via UI
-  const HIDE_ALWAYS = new Set(["BRANCH_ADMIN", "SUPER_ADMIN"]);
-
-  // Role options reflect policy:
-  // - SuperAdmin: all roles EXCEPT SUPER_ADMIN/BRANCH_ADMIN
-  // - Non-super: BRANCH-scoped roles only, never SUPER_ADMIN/BRANCH_ADMIN
-  // - Admin (branch): cannot assign ADMIN (self-replication restriction)
+  // UX guard:
+  // - SUPER_ADMIN never appears in dropdown for anyone
+  // - ADMIN appears only for Super Admin (non-super cannot create Admins)
   const roleOptions = useMemo(() => {
     if (isSuper) {
-      return roles.filter((r) => !HIDE_ALWAYS.has(r.name)).map((r) => r.name);
+      return roles.filter((r) => r.name !== "SUPER_ADMIN").map((r) => r.name);
     }
     return roles
-      .filter((r) => r.scope === "BRANCH" && !HIDE_ALWAYS.has(r.name))
-      .filter((r) => (isBranchAdmin ? r.name !== "ADMIN" : true))
+      .filter((r) => r.scope === "BRANCH")
+      .filter((r) => r.name !== "SUPER_ADMIN" && r.name !== "ADMIN")
       .map((r) => r.name);
-  }, [isSuper, isBranchAdmin, roles]);
+  }, [isSuper, roles]);
 
   // Form state
   const [form, setForm] = useState({
@@ -45,19 +40,20 @@ export default function CreateUser() {
     email: "",
     password: "ChangeMe123!",
     role: roleOptions[0] || "",
-    branch: branchId, // Branch admin is scoped to active branch
+    branch: isSuper ? "" : branchId, // non-super: locked to active branch
   });
 
   // local validation error (UI only)
   const [localError, setLocalError] = useState("");
 
-  // Keep default role valid when roleOptions load or change
+  // Keep defaults valid when roleOptions load or change
   useEffect(() => {
     setForm((s) => ({
       ...s,
       role: roleOptions.includes(s.role) ? s.role : roleOptions[0] || "",
+      branch: isSuper ? s.branch : branchId, // keep non-super locked
     }));
-  }, [roleOptions]);
+  }, [roleOptions, isSuper, branchId]);
 
   const [createUser, { isLoading, error, isSuccess }] = useCreateUserMutation();
 
@@ -76,28 +72,26 @@ export default function CreateUser() {
       email: form.email,
       password: form.password,
       roles: form.role ? [form.role] : [],
-      // For non-super the API ignores this and forces X-Branch-Id anyway;
-      // we still send it for SUPER and clarity.
+      // For non-super the API ignores branches and forces X-Branch-Id.
+      // We still send branch for SUPER (and clarity).
       branches: form.branch ? [form.branch] : [],
     };
 
     try {
       await createUser(payload).unwrap();
-      // Optional: navigate back to list after success
+      // Optional success navigation:
       // nav("/settings/user-management");
     } catch {
       // handled by RTKQ error state
     }
   };
 
-  const disabledBranchInput = !isSuper; // lock branch for branch-admin
+  const disabledBranchInput = !isSuper; // lock branch for non-super
   const errMsg = apiErrorMessage(error);
 
   const policyNote = isSuper
     ? "As Super Admin, you can assign any role (except Super Admin) and any branch."
-    : isBranchAdmin
-    ? "As Branch Admin, branch is locked and you cannot create another Admin."
-    : "As Branch-scoped user, branch is locked to your hospital.";
+    : "As Branch-scoped user, branch is locked to your hospital and you cannot create Admins.";
 
   return (
     <div className="max-w-xl bg-white p-6 rounded shadow">
@@ -162,8 +156,8 @@ export default function CreateUser() {
             </select>
             {!isSuper && (
               <p className="mt-1 text-xs text-gray-500">
-                Only branch-scoped roles are available.
-                {isBranchAdmin && " Admins cannot create Admin users."}
+                Only branch-scoped roles are available. Admin cannot be created
+                by non-super users.
               </p>
             )}
           </div>

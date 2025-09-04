@@ -1,11 +1,6 @@
-// src/modules/auth/authService.js (ESM)
-
-// ------------------------------------------------------------
-// Auth Service
-// ------------------------------------------------------------
-// This simply re-exports the login and register functions
-// from the Users module. Keeps a clean separation of concerns.
-// ------------------------------------------------------------
+// api/src/modules/auth/authService.js
+// ESM
+// Thin service that re-exports from users service to keep concerns clean.
 
 import { login, register } from "#modules/users/userService.js";
 
