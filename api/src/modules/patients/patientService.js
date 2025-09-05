@@ -1,8 +1,9 @@
 // ESM
 import MRNCounter from "./mrnCounterModel.js";
 import * as repo from "./patientRepository.js";
+import PatientNote from "./patientNoteModel.js"; // ← relative path to avoid alias resolution issues
 
-/** Format: MRN-<YYYY>-<BRANCHSEQ> (seq is zero-padded to 6) */
+// MRN generator (per-branch)
 async function generateMRN(branchId) {
   const year = new Date().getFullYear();
   const { seq } = await MRNCounter.findOneAndUpdate(
@@ -20,9 +21,23 @@ export const createPatient = async ({ branchId, data }) => {
   return repo.create(doc);
 };
 
-export const updatePatient = ({ branchId, id, data }) =>
+export const updatePatient = ({ branchId = null, id, data }) =>
   repo.updateById(id, branchId, data);
 
-export const getPatient = ({ branchId, id }) => repo.byId(id, branchId);
+export const getPatient = ({ branchId = null, id }) => repo.byId(id, branchId);
 
 export const listPatients = (args) => repo.search(args);
+
+export const softDeletePatient = async ({ id, branchId = null, by }) => {
+  const r = await repo.markDeleted(id, branchId, by);
+  return r.modifiedCount > 0;
+};
+
+/* ---------------- Notes (optional) ---------------- */
+export const listNotes = ({ patientId, branchId = null }) =>
+  PatientNote.find({ patientId, ...(branchId ? { branchId } : {}) })
+    .sort({ createdAt: -1 })
+    .lean();
+
+export const addNote = ({ patientId, branchId, text, authorId }) =>
+  PatientNote.create({ patientId, branchId, text, authorId });

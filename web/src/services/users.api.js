@@ -1,20 +1,16 @@
-// apps/web/src/services/users.api.js
 import { api } from "./baseApi";
 
 export const usersApi = api.injectEndpoints({
   endpoints: (build) => ({
+    // current user
     getMe: build.query({
       query: () => ({ url: "/me", method: "GET" }),
       providesTags: [{ type: "User", id: "ME" }],
     }),
-
-    // 👉 NEW: update current user's profile fields
     updateMe: build.mutation({
       query: (body) => ({ url: "/users/me", method: "PUT", body }),
       invalidatesTags: [{ type: "User", id: "ME" }],
     }),
-
-    // 👉 NEW: upload avatar
     uploadMyAvatar: build.mutation({
       query: (file) => {
         const form = new FormData();
@@ -24,7 +20,7 @@ export const usersApi = api.injectEndpoints({
       invalidatesTags: [{ type: "User", id: "ME" }],
     }),
 
-    // Existing …
+    // admin users
     listUsers: build.query({
       query: () => ({ url: "/users" }),
       providesTags: (res) =>
@@ -60,8 +56,8 @@ export const usersApi = api.injectEndpoints({
 
 export const {
   useGetMeQuery,
-  useUpdateMeMutation, // NEW
-  useUploadMyAvatarMutation, // NEW
+  useUpdateMeMutation,
+  useUploadMyAvatarMutation,
   useListUsersQuery,
   useCreateUserMutation,
   useSetUserPermissionsMutation,

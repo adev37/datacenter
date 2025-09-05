@@ -2,7 +2,6 @@ import { api } from "./baseApi";
 
 export const patientsApi = api.injectEndpoints({
   endpoints: (build) => ({
-    // GET /patients?search=&gender=&status=&sort=&page=&limit=
     listPatients: build.query({
       query: (params = {}) => ({ url: "/patients", params }),
       providesTags: (res) =>
@@ -13,20 +12,14 @@ export const patientsApi = api.injectEndpoints({
             ]
           : [{ type: "Patient", id: "LIST" }],
     }),
-
-    // GET /patients/:id
     getPatient: build.query({
       query: (id) => ({ url: `/patients/${id}` }),
-      providesTags: (_res, _err, id) => [{ type: "Patient", id }],
+      providesTags: (_r, _e, id) => [{ type: "Patient", id }],
     }),
-
-    // POST /patients (MRN is auto-generated server-side)
     createPatient: build.mutation({
       query: (body) => ({ url: "/patients", method: "POST", body }),
       invalidatesTags: [{ type: "Patient", id: "LIST" }],
     }),
-
-    // PATCH /patients/:id
     updatePatient: build.mutation({
       query: ({ id, ...body }) => ({
         url: `/patients/${id}`,
@@ -38,6 +31,46 @@ export const patientsApi = api.injectEndpoints({
         { type: "Patient", id: "LIST" },
       ],
     }),
+    deletePatient: build.mutation({
+      query: (id) => ({ url: `/patients/${id}`, method: "DELETE" }),
+      invalidatesTags: [{ type: "Patient", id: "LIST" }],
+    }),
+    deactivatePatient: build.mutation({
+      query: (id) => ({
+        url: `/patients/${id}`,
+        method: "PATCH",
+        body: { status: "inactive" },
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "Patient", id },
+        { type: "Patient", id: "LIST" },
+      ],
+    }),
+    activatePatient: build.mutation({
+      query: (id) => ({
+        url: `/patients/${id}`,
+        method: "PATCH",
+        body: { status: "active" },
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "Patient", id },
+        { type: "Patient", id: "LIST" },
+      ],
+    }),
+    listPatientNotes: build.query({
+      query: (id) => ({ url: `/patients/${id}/notes` }),
+      providesTags: (_r, _e, id) => [{ type: "Patient", id: `NOTES-${id}` }],
+    }),
+    addPatientNote: build.mutation({
+      query: ({ id, body }) => ({
+        url: `/patients/${id}/notes`,
+        method: "POST",
+        body: { body },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "Patient", id: `NOTES-${id}` },
+      ],
+    }),
   }),
 });
 
@@ -46,4 +79,9 @@ export const {
   useGetPatientQuery,
   useCreatePatientMutation,
   useUpdatePatientMutation,
+  useDeletePatientMutation,
+  useDeactivatePatientMutation,
+  useActivatePatientMutation,
+  useListPatientNotesQuery,
+  useAddPatientNoteMutation,
 } = patientsApi;

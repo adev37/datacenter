@@ -1,5 +1,4 @@
-// src/db/connection.js (ESM)
-
+// ESM
 import mongoose from "mongoose";
 
 let isConnected = false;

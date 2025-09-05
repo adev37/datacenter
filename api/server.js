@@ -1,10 +1,10 @@
-// api/server.js
 // ESM, no relative paths
 
 import "dotenv/config";
 import http from "http";
 import app from "#app"; // <-- keep this exact line
 import { connectMongo, disconnectMongo } from "#db/connection.js";
+import { ensurePatientIndexes } from "#db/ensureIndexes.js"; // 👈 NEW
 
 const PORT = Number(process.env.API_PORT ?? process.env.PORT ?? 8080);
 const HOST = process.env.API_HOST ?? "0.0.0.0";
@@ -20,6 +20,9 @@ async function start() {
     }
 
     await connectMongo(MONGO_URI);
+
+    // 👇 Ensure new compound (branchId, mrn) index and drop legacy mrn_1
+    await ensurePatientIndexes();
 
     server = http.createServer(app);
 

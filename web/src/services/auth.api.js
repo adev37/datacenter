@@ -1,4 +1,3 @@
-// apps/web/src/services/auth.api.js
 import { api } from "./baseApi";
 
 export const authApi = api.injectEndpoints({
@@ -9,7 +8,7 @@ export const authApi = api.injectEndpoints({
     }),
     login: build.mutation({
       query: (body) => ({ url: "/auth/login", method: "POST", body }),
-      invalidatesTags: ["Auth"],
+      invalidatesTags: ["Auth", { type: "User", id: "ME" }],
     }),
   }),
 });

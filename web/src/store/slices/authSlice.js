@@ -1,4 +1,4 @@
-// store/slices/authSlice.js
+// JS, not TS
 import { createSlice } from "@reduxjs/toolkit";
 import {
   clearAuth as clearStore,
@@ -14,11 +14,14 @@ const slice = createSlice({
   initialState: initial,
   reducers: {
     setAuth(state, { payload }) {
-      state.token = payload.accessToken ?? payload.token ?? state.token;
-      state.user = payload.user ?? state.user;
+      state.token = payload?.accessToken ?? payload?.token ?? state.token;
+      state.user = payload?.user ?? state.user;
+
+      // default branch if none chosen yet
       if (!state.branchId && (state.user?.branches?.length || 0) > 0) {
-        state.branchId = state.user.branches[0];
+        state.branchId = String(state.user.branches[0]);
       }
+
       saveAuth({
         token: state.token,
         user: state.user,
@@ -26,7 +29,7 @@ const slice = createSlice({
       });
     },
     setBranch(state, { payload }) {
-      state.branchId = payload;
+      state.branchId = String(payload);
       saveAuth({
         token: state.token,
         user: state.user,

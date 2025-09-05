@@ -1,4 +1,3 @@
-// apps/web/src/state/orgContext.jsx
 import React, {
   createContext,
   useContext,
@@ -17,17 +16,12 @@ export function OrgProvider({ children }) {
   const auth = useSelector((s) => s?.auth || {});
   const user = auth?.user ?? loadAuth()?.user ?? null;
 
-  // Normalize branches => hospitals [{id, name}]
+  // Back-end returns user.branches as array of IDs
   const hospitals = useMemo(() => {
-    // Back-end returns user.branches as array of strings (branch IDs)
     const raw = Array.isArray(user?.branches) ? user.branches : [];
-    return raw.map((id) => ({
-      id: String(id),
-      name: `Branch ${String(id)}`,
-    }));
+    return raw.map((id) => ({ id: String(id), name: `Branch ${String(id)}` }));
   }, [user]);
 
-  // Initial active hospital: Redux → persisted → first branch
   const persisted = loadAuth() || {};
   const initialId =
     auth?.branchId ||
@@ -36,15 +30,13 @@ export function OrgProvider({ children }) {
 
   const [activeHospitalId, setActiveHospitalId] = useState(initialId);
 
-  // Keep local state aligned if Redux/persisted change on first render
   useEffect(() => {
-    if (initialId && initialId !== activeHospitalId) {
+    if (initialId && initialId !== activeHospitalId)
       setActiveHospitalId(initialId);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialId]);
 
-  // When active branch changes → update Redux + persist → drives X-Branch-Id header
+  // Update Redux + persist → drives X-Branch-Id header in baseApi
   useEffect(() => {
     if (!activeHospitalId) return;
     dispatch(setBranch(activeHospitalId));

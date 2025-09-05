@@ -4,13 +4,14 @@ import mongoose from "mongoose";
 const PatientSchema = new mongoose.Schema(
   {
     branchId: {
-      type: mongoose.Types.ObjectId,
-      ref: "Branch",
+      type: String, // e.g., "BR001"
       index: true,
       required: true,
     },
 
-    mrn: { type: String, unique: true, sparse: true, index: true },
+    // MRN is not globally unique; uniqueness is per-branch via compound index below
+    mrn: { type: String, trim: true, index: true },
+
     status: {
       type: String,
       enum: ["active", "inactive", "deceased"],
@@ -51,9 +52,10 @@ const PatientSchema = new mongoose.Schema(
 
     isDeleted: { type: Boolean, default: false, index: true },
   },
-  { timestamps: true }
+  { timestamps: true, collection: "patients" }
 );
 
+// Full-text index for search
 PatientSchema.index(
   {
     mrn: "text",
@@ -68,5 +70,8 @@ PatientSchema.index(
     weights: { mrn: 5, lastName: 4, firstName: 3 },
   }
 );
+
+// ✅ Unique per-branch MRN
+PatientSchema.index({ branchId: 1, mrn: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model("Patient", PatientSchema);

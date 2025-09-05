@@ -3,8 +3,9 @@ import { Router } from "express";
 import { requireAuth } from "#middlewares/requireAuth.js";
 import { permit } from "#middlewares/rbac.js";
 import { validate } from "#middlewares/validate.js";
-import * as ctrl from "./patientEncounterController.js";
 import { z } from "zod";
+import * as ctrl from "./patientEncounterController.js";
+import { PERMS } from "#permissions";
 
 const router = Router({ mergeParams: true });
 
@@ -42,19 +43,19 @@ router.use(requireAuth);
 
 router.get(
   "/",
-  permit("encounters:read"),
+  permit(PERMS.ENCOUNTER_READ),
   validate({ query: listQuery }),
   ctrl.list
 );
 router.post(
   "/",
-  permit("encounters:create"),
+  permit(PERMS.ENCOUNTER_WRITE),
   validate({ body: bodySchema }),
   ctrl.create
 );
 router.patch(
   "/:id",
-  permit("encounters:update"),
+  permit(PERMS.ENCOUNTER_WRITE),
   validate({ body: bodySchema }),
   ctrl.update
 );

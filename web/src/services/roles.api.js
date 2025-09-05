@@ -1,4 +1,3 @@
-// apps/web/src/services/roles.api.js
 import { api } from "./baseApi";
 
 export const rolesApi = api.injectEndpoints({

@@ -1,5 +1,3 @@
-// PATH: apps/web/src/pages/patients/PatientList.jsx
-
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
@@ -9,8 +7,10 @@ import Select from "@/components/ui/Select";
 import Icon from "@/components/AppIcon";
 import Image from "@/components/AppImage";
 
-/* --------------------------------- helpers -------------------------------- */
+import { useListPatientsQuery } from "@/services/patients.api"; // ← note the .api
+import { calcAge, fullName } from "@/utils/patient";
 
+/* --------------------------------- helpers -------------------------------- */
 const StatusPill = ({ status = "active" }) => {
   const map = {
     active: "bg-success/10 text-success",
@@ -22,7 +22,7 @@ const StatusPill = ({ status = "active" }) => {
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
         map[status] || map.active
       }`}>
-      {status}
+      {status || "active"}
     </span>
   );
 };
@@ -37,90 +37,21 @@ const columns = [
   { key: "actions", label: "Actions", width: "w-[12rem]" },
 ];
 
-/* ------------------------------- mock dataset ------------------------------ */
-
-const seedPatients = [
-  {
-    id: "PAT-001",
-    mrn: "MRN-018046358",
-    firstName: "Robert",
-    lastName: "Johnson",
-    gender: "Male",
-    age: 58,
-    phone: "(555) 123-4567",
-    lastVisit: "2024-01-15",
-    status: "active",
-    photo:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-  },
-  {
-    id: "PAT-002",
-    mrn: "MRN-018046359",
-    firstName: "Sarah",
-    lastName: "Davis",
-    gender: "Female",
-    age: 41,
-    phone: "(555) 765-4321",
-    lastVisit: "2024-01-10",
-    status: "active",
-    photo:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
-  },
-  {
-    id: "PAT-003",
-    mrn: "MRN-018046360",
-    firstName: "Michael",
-    lastName: "Brown",
-    gender: "Male",
-    age: 65,
-    phone: "(555) 444-9876",
-    lastVisit: "2023-12-29",
-    status: "inactive",
-    photo:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
-  },
-  {
-    id: "PAT-004",
-    mrn: "MRN-018046361",
-    firstName: "Jennifer",
-    lastName: "Wilson",
-    gender: "Female",
-    age: 52,
-    phone: "(555) 333-6789",
-    lastVisit: "2024-01-03",
-    status: "active",
-    photo:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&h=150&fit=crop&crop=face",
-  },
-];
-
-// Duplicate a bit so pagination feels real
-const MOCK = Array.from({ length: 24 }).map((_, i) => {
-  const base = seedPatients[i % seedPatients.length];
-  return {
-    ...base,
-    id: `PAT-${String(i + 1).padStart(3, "0")}`,
-    mrn: `MRN-0180${46358 + i}`,
-    lastVisit: i % 5 === 0 ? "—" : base.lastVisit,
-    status: i % 11 === 0 ? "deceased" : i % 4 === 0 ? "inactive" : "active",
-  };
-});
-
 /* ---------------------------------- page ---------------------------------- */
-
 export default function PatientList() {
   // filters
   const [query, setQuery] = useState("");
   const [gender, setGender] = useState("all");
   const [status, setStatus] = useState("all");
   const [sortBy, setSortBy] = useState("name");
-  const [pageSize, setPageSize] = useState(10);
+  const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
 
   const genders = [
     { value: "all", label: "Any Gender" },
     { value: "Male", label: "Male" },
     { value: "Female", label: "Female" },
+    { value: "Other", label: "Other" },
   ];
 
   const statuses = [
@@ -133,50 +64,50 @@ export default function PatientList() {
   const sorters = [
     { value: "name", label: "Name (A–Z)" },
     { value: "mrn", label: "MRN" },
-    { value: "lastVisit", label: "Last Visit (desc)" },
+    { value: "lastVisit", label: "Last Visit (desc)" }, // backend can map to updatedAt
   ];
 
-  // derive filtered + sorted
-  const filtered = useMemo(() => {
-    let list = MOCK;
+  // server params
+  const params = useMemo(
+    () => ({
+      search: query || undefined,
+      gender: gender !== "all" ? gender : undefined,
+      status: status !== "all" ? status : undefined,
+      sort: sortBy,
+      page,
+      limit,
+    }),
+    [query, gender, status, sortBy, page, limit]
+  );
 
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.mrn.toLowerCase().includes(q) ||
-          `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
-          p.phone.toLowerCase().includes(q)
-      );
-    }
-    if (gender !== "all") list = list.filter((p) => p.gender === gender);
-    if (status !== "all") list = list.filter((p) => p.status === status);
+  const { data, isFetching, isLoading, isError, error } = useListPatientsQuery(
+    params,
+    { refetchOnMountOrArgChange: true }
+  );
 
-    switch (sortBy) {
-      case "mrn":
-        list = [...list].sort((a, b) => a.mrn.localeCompare(b.mrn));
-        break;
-      case "lastVisit":
-        list = [...list].sort((a, b) =>
-          (b.lastVisit || "").localeCompare(a.lastVisit || "")
-        );
-        break;
-      default:
-        list = [...list].sort((a, b) =>
-          `${a.firstName} ${a.lastName}`.localeCompare(
-            `${b.firstName} ${b.lastName}`
-          )
-        );
-    }
-
-    return list;
-  }, [query, gender, status, sortBy]);
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const current = filtered.slice((page - 1) * pageSize, page * pageSize);
-
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
   const goto = (n) => setPage(Math.min(Math.max(1, n), totalPages));
+
+  // normalize rows to render exactly like the screenshot
+  const rows = (data?.items || []).map((p) => {
+    const name = fullName(p) || "—";
+    const img =
+      p.photoUrl ||
+      "https://api.dicebear.com/7.x/initials/svg?seed=" +
+        encodeURIComponent(name || "P");
+    return {
+      id: p._id || p.id,
+      mrn: p.mrn || "—",
+      name,
+      age: calcAge(p.dob),
+      gender: p.gender || "—",
+      phone: p.phone || "—",
+      lastVisit: "—", // placeholder until backend provides
+      status: p.status || "active",
+      photo: img,
+    };
+  });
 
   return (
     <>
@@ -254,78 +185,104 @@ export default function PatientList() {
               </tr>
             </thead>
             <tbody>
-              {current.map((p) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-border last:border-b-0">
-                  {/* MRN */}
-                  <td className="px-4 py-3 text-sm font-medium text-blue-700">
-                    <Link to={`/patients/${p.id}`} className="hover:underline">
-                      {p.mrn}
-                    </Link>
-                  </td>
-
-                  {/* Name */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Image
-                        src={p.photo}
-                        alt={p.firstName}
-                        className="h-9 w-9 rounded-full border border-border object-cover"
-                      />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-text-primary">
-                          {p.firstName} {p.lastName}
-                        </div>
-                        <div className="text-xs text-text-secondary">
-                          {p.id}
-                        </div>
+              {(isLoading || isFetching) && rows.length === 0 ? (
+                Array.from({ length: limit }).map((_, i) => (
+                  <tr key={`sk-${i}`} className="border-b border-border">
+                    <td
+                      colSpan={columns.length}
+                      className="px-4 py-3 text-sm text-text-secondary">
+                      Loading…
+                    </td>
+                  </tr>
+                ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-16">
+                    <div className="text-center">
+                      <div className="text-lg font-medium text-error">
+                        Failed to load patients
                       </div>
-                    </div>
-                  </td>
-
-                  {/* Age / Gender */}
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    {p.age} / {p.gender}
-                  </td>
-
-                  {/* Phone */}
-                  <td className="px-4 py-3 text-sm text-text-primary">
-                    {p.phone}
-                  </td>
-
-                  {/* Last Visit */}
-                  <td className="px-4 py-3 text-sm text-text-secondary">
-                    {p.lastVisit || "—"}
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-4 py-3">
-                    <StatusPill status={p.status} />
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link to={`/patients/${p.id}`}>
-                          <Icon name="Eye" size={14} className="mr-1" />
-                          View
-                        </Link>
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Icon name="Calendar" size={14} className="mr-1" />
-                        Appt
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Icon name="MoreVertical" size={14} />
-                      </Button>
+                      <p className="text-sm text-text-secondary">
+                        {(error && (error.data?.message || error.error)) ||
+                          "Please try again."}
+                      </p>
                     </div>
                   </td>
                 </tr>
-              ))}
+              ) : rows.length > 0 ? (
+                rows.map((p) => (
+                  <tr
+                    key={p.id}
+                    className="border-b border-border last:border-b-0">
+                    {/* MRN */}
+                    <td className="px-4 py-3 text-sm font-medium text-blue-700">
+                      <Link
+                        to={`/patients/${p.id}`}
+                        className="hover:underline">
+                        {p.mrn}
+                      </Link>
+                    </td>
 
-              {current.length === 0 && (
+                    {/* Name */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <Image
+                          src={p.photo}
+                          alt={p.name}
+                          className="h-9 w-9 rounded-full border border-border object-cover"
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {p.name}
+                          </div>
+                          <div className="text-xs text-text-secondary">
+                            {p.id}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Age / Gender */}
+                    <td className="px-4 py-3 text-sm text-text-primary">
+                      {(p.age ?? "—") + " / " + (p.gender || "—")}
+                    </td>
+
+                    {/* Phone */}
+                    <td className="px-4 py-3 text-sm text-text-primary">
+                      {p.phone}
+                    </td>
+
+                    {/* Last Visit */}
+                    <td className="px-4 py-3 text-sm text-text-secondary">
+                      {p.lastVisit}
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-4 py-3">
+                      <StatusPill status={p.status} />
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link to={`/patients/${p.id}`}>
+                            <Icon name="Eye" size={14} className="mr-1" />
+                            View
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <Icon name="Calendar" size={14} className="mr-1" />
+                          Appt
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <Icon name="MoreVertical" size={14} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-16">
                     <div className="text-center">
@@ -359,17 +316,17 @@ export default function PatientList() {
           <div className="text-sm text-text-secondary">
             Showing{" "}
             <span className="font-medium text-text-primary">
-              {total === 0 ? 0 : (page - 1) * pageSize + 1}–
-              {Math.min(page * pageSize, total)}
+              {total === 0 ? 0 : (page - 1) * limit + 1}–
+              {Math.min(page * limit, total)}
             </span>{" "}
             of <span className="font-medium text-text-primary">{total}</span>
           </div>
 
           <div className="flex items-center gap-2">
             <Select
-              value={String(pageSize)}
+              value={String(limit)}
               onChange={(v) => {
-                setPageSize(Number(v));
+                setLimit(Number(v));
                 setPage(1);
               }}
               options={[

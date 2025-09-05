@@ -22,7 +22,7 @@ import { getMe } from "#modules/users/me.controller.js";
 // ...existing imports
 import patientRoutes from "#modules/patients/patientRoutes.js";
 import patientEncounterRoutes from "#modules/encounters/patientEncounterRoutes.js";
-
+import notificationRoutes from "#modules/notifications/notificationRoutes.js";
 const {
   API_CORS_ORIGINS = "",
   NODE_ENV = "development",
@@ -74,6 +74,7 @@ app.use("/api/v1/roles", roleRoutes);
 app.use("/api/v1/patients", patientRoutes);
 app.use("/api/v1/patients/:patientId/encounters", patientEncounterRoutes);
 app.use("/api/v1/audits", auditRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 
 // Serve avatars/static uploads
 app.use(

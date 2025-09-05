@@ -8,21 +8,34 @@ import fs from "node:fs";
 const root = process.cwd();
 const uploadRoot = path.join(root, "uploads");
 const avatarDir = path.join(uploadRoot, "avatars");
+const patientDir = path.join(uploadRoot, "patients");
 
 // Ensure folders exist
-for (const dir of [uploadRoot, avatarDir]) {
+for (const dir of [uploadRoot, avatarDir, patientDir]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
+const imgExtOk = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+function safeExt(original) {
+  const ext = path.extname(original || "").toLowerCase();
+  return imgExtOk.includes(ext) ? ext : ".jpg";
+}
+
+const avatarStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, avatarDir),
   filename: (req, file, cb) => {
-    // user-<id>-<timestamp>.<ext>
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const safeExt = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext)
-      ? ext
-      : ".jpg";
-    const base = `user-${req.user?.sub || "anon"}-${Date.now()}${safeExt}`;
+    const base = `user-${req.user?.sub || "anon"}-${Date.now()}${safeExt(
+      file.originalname
+    )}`;
+    cb(null, base);
+  },
+});
+
+const patientStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, patientDir),
+  filename: (req, file, cb) => {
+    const id = req.params?.id || "unknown";
+    const base = `patient-${id}-${Date.now()}${safeExt(file.originalname)}`;
     cb(null, base);
   },
 });
@@ -35,7 +48,13 @@ function fileFilter(_req, file, cb) {
 }
 
 export const avatarUpload = multer({
-  storage,
+  storage: avatarStorage,
   fileFilter,
-  limits: { fileSize: 3 * 1024 * 1024 }, // 3 MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 }).single("avatar");
+
+export const patientPhotoUpload = multer({
+  storage: patientStorage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+}).single("photo");

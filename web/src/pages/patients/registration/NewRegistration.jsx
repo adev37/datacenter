@@ -1,11 +1,15 @@
-// PATH: apps/web/src/pages/patients/registration/NewRegistration.jsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Icon from "@/components/AppIcon";
 import Image from "@/components/AppImage";
+
+import { useCreatePatientMutation } from "@/services/patients.api";
+import { API_BASE } from "@/services/baseApi";
 
 /* --------------------------------- UI bits -------------------------------- */
 const StepDot = ({ active, number, title, subtitle }) => (
@@ -24,17 +28,34 @@ const StepDot = ({ active, number, title, subtitle }) => (
   </div>
 );
 
+/* ------------------------------- utilities -------------------------------- */
+function isValidDateStr(yyyy_mm_dd) {
+  if (!yyyy_mm_dd) return false;
+  const d = new Date(yyyy_mm_dd);
+  return !isNaN(+d) && yyyy_mm_dd.length >= 10;
+}
+function clean(obj) {
+  // remove undefined, null, and "" (but keep 0/false)
+  const out = {};
+  Object.entries(obj || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    if (typeof v === "string" && v.trim() === "") return;
+    out[k] = v;
+  });
+  return out;
+}
+
 /* -------------------------------- Component ------------------------------- */
 export default function NewRegistration() {
+  const navigate = useNavigate();
+  const [createPatient, { isLoading: creating }] = useCreatePatientMutation();
+
   const [step, setStep] = useState(1);
 
-  // Refs used by calendar & file picker
   const dobRef = useRef(null);
   const fileRef = useRef(null);
 
-  // form model (all steps)
   const [form, setForm] = useState({
-    // Step 1
     firstName: "",
     middleName: "",
     lastName: "",
@@ -42,7 +63,6 @@ export default function NewRegistration() {
     gender: "",
     maritalStatus: "",
     photo: null,
-    // Step 2
     phone: "",
     email: "",
     address1: "",
@@ -50,20 +70,42 @@ export default function NewRegistration() {
     city: "",
     state: "",
     zipcode: "",
-    // Step 3
     insurer: "",
     plan: "",
     policyNo: "",
     coverage: "",
-    // Step 4
     emergencyName: "",
     emergencyRelation: "",
     emergencyPhone: "",
   });
 
+  const [previewUrl, setPreviewUrl] = useState(""); // for URL.revokeObjectURL
+  useEffect(() => {
+    if (!form.photo) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl("");
+      return;
+    }
+    const u = URL.createObjectURL(form.photo);
+    setPreviewUrl(u);
+    return () => URL.revokeObjectURL(u);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.photo]);
+
   const [touched, setTouched] = useState({});
   const [saving, setSaving] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
+
+  // warn on close if unsaved
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!unsaved) return;
+      e.preventDefault();
+      e.returnValue = ""; // required for some browsers
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [unsaved]);
 
   const update = (k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
@@ -74,7 +116,7 @@ export default function NewRegistration() {
   const requiredByStep = {
     1: ["firstName", "lastName", "dob", "gender"],
     2: ["phone", "address1", "city"],
-    3: [], // optional in mock
+    3: [],
     4: ["emergencyPhone"],
   };
 
@@ -84,6 +126,7 @@ export default function NewRegistration() {
     if (!form.firstName?.trim()) e.firstName = "First name is required";
     if (!form.lastName?.trim()) e.lastName = "Last name is required";
     if (!form.dob?.trim()) e.dob = "Date of birth is required";
+    else if (!isValidDateStr(form.dob)) e.dob = "Enter a valid date";
     if (!form.gender?.trim()) e.gender = "Gender is required";
     // Step 2
     if (step >= 2) {
@@ -103,7 +146,6 @@ export default function NewRegistration() {
 
   const hasError = (k) => touched[k] && errors[k];
 
-  // smooth focus to first error on step
   const firstErrorRef = useRef(null);
   const attachFirstError = (el) => {
     if (!firstErrorRef.current && el) firstErrorRef.current = el;
@@ -129,34 +171,107 @@ export default function NewRegistration() {
     }, 600);
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     markStepTouched(step);
     firstErrorRef.current = null;
 
-    if (stepValid(step)) {
-      if (step < 4) setStep(step + 1);
-      else console.log("Submit payload:", form);
-      return;
-    }
-
-    // focus to first error in view
-    setTimeout(() => {
-      if (firstErrorRef.current?.scrollIntoView) {
-        firstErrorRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-        if (firstErrorRef.current?.querySelector) {
+    if (!stepValid(step)) {
+      setTimeout(() => {
+        if (firstErrorRef.current?.scrollIntoView) {
+          firstErrorRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
           const focusable = firstErrorRef.current.querySelector(
             "input, select, textarea, button"
           );
           focusable?.focus?.();
         }
-      }
-    }, 0);
+      }, 0);
+      return;
+    }
+
+    if (step < 4) {
+      setStep(step + 1);
+      return;
+    }
+    await handleSubmit();
   };
 
   const goBack = () => setStep((s) => Math.max(1, s - 1));
+
+  /* ------------------------------ submission ------------------------------- */
+  const handleSubmit = async () => {
+    if (creating) return; // double-submit guard
+    try {
+      const payload = clean({
+        firstName: form.firstName.trim(),
+        middleName: form.middleName?.trim(),
+        lastName: form.lastName.trim(),
+        dob: isValidDateStr(form.dob) ? new Date(form.dob) : undefined,
+        gender: form.gender,
+        maritalStatus: form.maritalStatus,
+
+        phone: form.phone,
+        email: form.email,
+
+        address: [form.address1, form.address2].filter(Boolean).join(", "),
+        city: form.city,
+        state: form.state,
+        zip: form.zipcode,
+
+        insurance:
+          form.insurer || form.plan || form.policyNo || form.coverage
+            ? clean({
+                provider: form.insurer,
+                plan: form.plan,
+                policyNo: form.policyNo,
+                coverage: form.coverage,
+              })
+            : undefined,
+
+        emergency:
+          form.emergencyName || form.emergencyRelation || form.emergencyPhone
+            ? clean({
+                name: form.emergencyName,
+                relationship: form.emergencyRelation,
+                phone: form.emergencyPhone,
+              })
+            : undefined,
+      });
+
+      const created = await createPatient(payload).unwrap(); // { _id, mrn, ... }
+      const patientId = created._id || created.id;
+
+      if (patientId && form.photo) {
+        try {
+          const fd = new FormData();
+          fd.append("photo", form.photo);
+          const res = await fetch(`${API_BASE}/patients/${patientId}/photo`, {
+            method: "POST",
+            credentials: "include",
+            body: fd,
+          });
+          // non-fatal if upload fails
+          if (!res.ok) {
+            // you can log or toast here if you have a toast system
+          }
+        } catch {
+          // ignore upload error; continue to navigate
+        }
+      }
+
+      setUnsaved(false);
+      navigate(`/patients/${patientId}`);
+    } catch (e) {
+      const msg =
+        e?.data?.message ||
+        e?.error ||
+        e?.message ||
+        "Failed to create patient";
+      alert(msg);
+    }
+  };
 
   /* ---------------------------------- data --------------------------------- */
   const genders = [
@@ -298,7 +413,6 @@ export default function NewRegistration() {
                     Date of Birth <span className="text-red-600">*</span>
                   </label>
                   <div className="relative">
-                    {/* native date input for reliable picker */}
                     <input
                       ref={dobRef}
                       type="date"
@@ -319,7 +433,8 @@ export default function NewRegistration() {
                           : dobRef.current?.focus()
                       }
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500"
-                      aria-label="Open calendar"></button>
+                      aria-label="Open calendar"
+                    />
                   </div>
                   {hasError("dob") && (
                     <p className="mt-1 text-xs text-red-600">{errors.dob}</p>
@@ -595,9 +710,9 @@ export default function NewRegistration() {
           <h3 className="mb-4 text-base font-semibold">Patient Photo</h3>
           <div className="grid place-content-center rounded-2xl border border-dashed bg-slate-50 p-8">
             <div className="mx-auto grid place-content-center rounded-full bg-white p-6 shadow-inner">
-              {form.photo ? (
+              {previewUrl ? (
                 <Image
-                  src={URL.createObjectURL(form.photo)}
+                  src={previewUrl}
                   alt="Patient"
                   className="h-28 w-28 rounded-full object-cover"
                 />
@@ -607,7 +722,6 @@ export default function NewRegistration() {
             </div>
 
             <div className="mt-4 grid gap-2">
-              {/* Hidden input lives on its own and is triggered programmatically */}
               <input
                 ref={fileRef}
                 className="hidden"
@@ -662,11 +776,14 @@ export default function NewRegistration() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={goBack} disabled={step === 1}>
+            <Button
+              variant="outline"
+              onClick={goBack}
+              disabled={step === 1 || creating}>
               <Icon name="ChevronLeft" size={16} className="mr-2" />
               Back
             </Button>
-            <Button onClick={goNext}>
+            <Button onClick={goNext} loading={creating} disabled={creating}>
               {step < 4 ? "Next" : "Submit"}
               <Icon name="ChevronRight" size={16} className="ml-2" />
             </Button>

@@ -1,10 +1,13 @@
 // ESM
 import Encounter from "./encounterModel.js";
 
+/** Resolve effective branch */
 function resolveBranchId(req) {
-  const isAdmin = req.user?.roles?.includes("Admin");
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
+  const isAdmin = roles.includes("ADMIN"); // 👈 FIXED (all caps)
   const headerBranch = req.get?.("x-branch-id");
   if (isAdmin && headerBranch) return headerBranch;
+
   const branchId = req.ctx?.branchId;
   if (!branchId) {
     const err = new Error("Branch context required");
@@ -14,7 +17,8 @@ function resolveBranchId(req) {
   return branchId;
 }
 
-export const create = async (req, res, next) => {
+/* Create */
+export async function create(req, res, next) {
   try {
     const branchId = resolveBranchId(req);
     const { patientId } = req.params;
@@ -38,19 +42,21 @@ export const create = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-};
+}
 
-export const update = async (req, res, next) => {
+/* Update */
+export async function update(req, res, next) {
   try {
     const branchId = resolveBranchId(req);
     const { patientId, id } = req.params;
+
     const enc = await Encounter.findOneAndUpdate(
       { _id: id, patientId, branchId },
       { $set: { ...req.body, updatedBy: req.user?.sub } },
       { new: true }
     );
-    if (!enc) return res.status(404).json({ message: "Encounter not found" });
 
+    if (!enc) return res.status(404).json({ message: "Encounter not found" });
     req.audit?.log?.("encounter.update", {
       encounterId: id,
       patientId,
@@ -60,9 +66,10 @@ export const update = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-};
+}
 
-export const list = async (req, res, next) => {
+/* List */
+export async function list(req, res, next) {
   try {
     const branchId = resolveBranchId(req);
     const { patientId } = req.params;
@@ -82,4 +89,4 @@ export const list = async (req, res, next) => {
   } catch (e) {
     next(e);
   }
-};
+}

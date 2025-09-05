@@ -1,20 +1,35 @@
 // ESM
 import Patient from "./patientModel.js";
 
-const baseFind = (branchId) => ({ branchId, isDeleted: { $ne: true } });
+const baseFind = (branchId) => ({
+  ...(branchId ? { branchId } : {}), // branch filter only when provided
+  isDeleted: { $ne: true },
+});
 
 export const create = (doc) => Patient.create(doc);
-
-export const byId = (id, branchId) =>
+export const byId = (id, branchId = null) =>
   Patient.findOne({ _id: id, ...baseFind(branchId) });
 
-export const updateById = (id, branchId, update) =>
+export const updateById = (id, branchId = null, update) =>
   Patient.findOneAndUpdate({ _id: id, ...baseFind(branchId) }, update, {
     new: true,
   });
 
+export const markDeleted = (id, branchId = null, by = null) =>
+  Patient.updateOne(
+    { _id: id, ...baseFind(branchId) },
+    {
+      $set: {
+        isDeleted: true,
+        status: "inactive",
+        deletedAt: new Date(),
+        deletedBy: by,
+      },
+    }
+  );
+
 export const search = async ({
-  branchId,
+  branchId = null,
   search,
   gender,
   status,
@@ -25,7 +40,6 @@ export const search = async ({
   const filter = baseFind(branchId);
   if (gender) filter.gender = gender;
   if (status) filter.status = status;
-
   if (search) {
     filter.$or = [
       { $text: { $search: search } },
@@ -35,7 +49,6 @@ export const search = async ({
       { lastName: new RegExp(search, "i") },
     ];
   }
-
   const sortSpec =
     sort === "mrn"
       ? { mrn: 1 }
@@ -43,15 +56,12 @@ export const search = async ({
       ? { updatedAt: -1 }
       : { lastName: 1, firstName: 1 };
 
-  const cursor = Patient.find(filter)
-    .collation({ locale: "en", strength: 2 })
-    .sort(sortSpec);
-
   const total = await Patient.countDocuments(filter);
-  const items = await cursor
+  const items = await Patient.find(filter)
+    .collation({ locale: "en", strength: 2 })
+    .sort(sortSpec)
     .skip((page - 1) * limit)
     .limit(limit)
     .lean();
-
   return { total, items };
 };

@@ -52,7 +52,16 @@ const PatientMedicalRecords = React.lazy(() =>
     /* webpackChunkName: "patients-medical-records" */ "./pages/patients/patient-medical-record"
   )
 );
+const EditPatient = React.lazy(() =>
+  import(/* webpackChunkName: "patients-edit" */ "./pages/patients/EditPatient")
+);
 
+// ---- Notifications (new) --------------------------------------
+const Notifications = React.lazy(() =>
+  import(
+    /* webpackChunkName: "notifications" */ "./pages/notifications/Notifications"
+  )
+);
 // ---- Appointments ----------------------------------------------------------
 const AppointmentList = React.lazy(() =>
   import(
@@ -319,7 +328,33 @@ export default function RoutesApp() {
               />
             }
           />
-
+          <Route
+            path="patients/:id/edit"
+            element={
+              <PrivateRoute
+                requirePerm="patient.write"
+                element={
+                  <WithSuspense>
+                    <EditPatient />
+                  </WithSuspense>
+                }
+              />
+            }
+          />
+          {/* ------ Notifications ------ */}
+          <Route
+            path="notifications"
+            element={
+              <PrivateRoute
+                requirePerm="notifications.read"
+                element={
+                  <WithSuspense>
+                    <Notifications />
+                  </WithSuspense>
+                }
+              />
+            }
+          />
           {/* ------ Appointments ------ */}
           <Route
             path="appointments"
