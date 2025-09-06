@@ -53,5 +53,9 @@ export const listPatientsSchema = z.object({
     sort: z.enum(["name", "mrn", "lastVisit"]).optional().default("name"),
     page: z.coerce.number().int().positive().optional().default(1),
     limit: z.coerce.number().int().positive().max(100).optional().default(10),
+    deleted: z
+      .enum(["exclude", "include", "only"])
+      .optional()
+      .default("exclude"),
   }),
 });

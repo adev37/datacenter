@@ -2,30 +2,41 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-/**
- * Notification audience model.
- * - audience: "BRANCH" => visible to all users of branchId
- * - audience: "USER"   => visible only to listed userIds
- * - readBy: userIds who have read the item (for per-user read state)
- */
+const ReadBySchema = new Schema(
+  {
+    userId: { type: String, required: true }, // req.user.sub
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const NotificationSchema = new Schema(
   {
     audience: {
       type: String,
-      enum: ["BRANCH", "USER"],
+      enum: ["USER", "BRANCH", "ALL"],
       default: "BRANCH",
       index: true,
     },
-    branchId: { type: String, index: true }, // required for BRANCH audience
-    userIds: [{ type: String, index: true }], // used for USER audience
-    kind: { type: String, default: "info", index: true }, // e.g., "patient.created"
-    title: { type: String, required: true },
-    message: { type: String, default: "" },
-    data: { type: Object, default: {} }, // e.g., { patientId, mrn }
-    readBy: [{ type: String, index: true }], // userIds who read it
+    branchId: { type: String, index: true }, // for audience BRANCH
+    userIds: [{ type: String, index: true }], // for audience USER
+    kind: { type: String, trim: true }, // e.g. patient.created
+    title: { type: String, trim: true },
+    message: { type: String, trim: true },
+    severity: {
+      type: String,
+      enum: ["info", "warning", "error"],
+      default: "info",
+    },
+    data: { type: Object, default: {} }, // arbitrary payload (e.g., { patientId })
+    readBy: { type: [ReadBySchema], default: [] }, // per-user read markers
   },
   { timestamps: true, collection: "notifications" }
 );
 
+// Helpful indexes
 NotificationSchema.index({ createdAt: -1 });
+NotificationSchema.index({ audience: 1, branchId: 1, createdAt: -1 });
+NotificationSchema.index({ audience: 1, userIds: 1, createdAt: -1 });
+
 export default mongoose.model("Notification", NotificationSchema);

@@ -2,11 +2,12 @@
 import Patient from "./patientModel.js";
 
 const baseFind = (branchId) => ({
-  ...(branchId ? { branchId } : {}), // branch filter only when provided
-  isDeleted: { $ne: true },
+  ...(branchId ? { branchId } : {}),
+  isDeleted: { $ne: true }, // keep excluding archived rows
 });
 
 export const create = (doc) => Patient.create(doc);
+
 export const byId = (id, branchId = null) =>
   Patient.findOne({ _id: id, ...baseFind(branchId) });
 
@@ -15,9 +16,18 @@ export const updateById = (id, branchId = null, update) =>
     new: true,
   });
 
+/** Deactivate/Reactivate by status only (do not hide) */
+export const setStatusById = (id, branchId = null, status, meta = {}) =>
+  Patient.findOneAndUpdate(
+    { _id: id, ...(branchId ? { branchId } : {}), isDeleted: { $ne: true } },
+    { $set: { status, ...meta } },
+    { new: true }
+  );
+
+/** Optional real soft-delete (archive) – not used by Deactivate anymore */
 export const markDeleted = (id, branchId = null, by = null) =>
   Patient.updateOne(
-    { _id: id, ...baseFind(branchId) },
+    { _id: id, ...(branchId ? { branchId } : {}), isDeleted: { $ne: true } },
     {
       $set: {
         isDeleted: true,
@@ -26,6 +36,22 @@ export const markDeleted = (id, branchId = null, by = null) =>
         deletedBy: by,
       },
     }
+  );
+
+/** Optional restore from archived state */
+export const restoreFromDeleted = (id, branchId = null, by = null) =>
+  Patient.findOneAndUpdate(
+    { _id: id, ...(branchId ? { branchId } : {}), isDeleted: true },
+    {
+      $set: {
+        isDeleted: false,
+        status: "active",
+        restoredAt: new Date(),
+        restoredBy: by,
+      },
+      $unset: { deletedAt: 1, deletedBy: 1 },
+    },
+    { new: true }
   );
 
 export const search = async ({
@@ -49,6 +75,7 @@ export const search = async ({
       { lastName: new RegExp(search, "i") },
     ];
   }
+
   const sortSpec =
     sort === "mrn"
       ? { mrn: 1 }
@@ -63,5 +90,6 @@ export const search = async ({
     .skip((page - 1) * limit)
     .limit(limit)
     .lean();
+
   return { total, items };
 };

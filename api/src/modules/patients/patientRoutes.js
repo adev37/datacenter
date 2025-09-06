@@ -1,7 +1,7 @@
-// api/src/modules/patients/patientRoutes.js
+// ESM
 import { Router } from "express";
 import { requireAuth } from "#middlewares/requireAuth.js";
-import * as RBAC from "#middlewares/rbac.js"; // <—
+import * as RBAC from "#middlewares/rbac.js";
 import { validate } from "#middlewares/validate.js";
 import { PERMS } from "#permissions";
 import * as ctrl from "./patientController.js";
@@ -13,10 +13,11 @@ import {
 } from "./schemas.js";
 
 const router = Router();
-const permit = RBAC.permit || RBAC.hasPerm; // <— pick what exists
+const permit = RBAC.permit || RBAC.hasPerm;
 
 router.use(requireAuth);
 
+// list / create / get / update
 router.get(
   "/",
   permit(PERMS.PATIENT_READ),
@@ -37,7 +38,7 @@ router.patch(
   ctrl.update
 );
 
-// status endpoint
+// status
 const statusSchema = z.object({
   params: z.object({ id: z.string().regex(/^[0-9a-fA-F]{24}$/) }),
   body: z.object({ status: z.enum(["active", "inactive", "deceased"]) }),
@@ -49,8 +50,14 @@ router.post(
   ctrl.setStatus
 );
 
+// deactivate (no hide) / restore (legacy)
 router.delete("/:id", permit(PERMS.PATIENT_WRITE), ctrl.softDelete);
+router.post("/:id/restore", permit(PERMS.PATIENT_WRITE), ctrl.restore);
+
+// photo / print / notes
 router.post("/:id/photo", permit(PERMS.PATIENT_WRITE), ctrl.uploadPhoto);
 router.get("/:id/print", permit(PERMS.PATIENT_READ), ctrl.printProfile);
+router.get("/:id/notes", permit(PERMS.PATIENT_READ), ctrl.listNotes);
+router.post("/:id/notes", permit(PERMS.PATIENT_WRITE), ctrl.addNote);
 
 export default router;

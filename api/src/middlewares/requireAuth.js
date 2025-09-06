@@ -1,4 +1,3 @@
-// api/src/middlewares/requireAuth.js
 // ESM
 
 import jwt from "jsonwebtoken";

@@ -1,13 +1,21 @@
-// apps/web/src/pages/patients/PatientProfile.jsx
-import React, { useEffect, useMemo } from "react";
-import { useParams, Link } from "react-router-dom"; // ← add Link
+import React, { useEffect, useMemo, useRef } from "react";
+import { useParams, Link } from "react-router-dom";
+import { useSelector } from "react-redux";
 import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/AppIcon";
 import Image from "@/components/AppImage";
-import { useGetPatientQuery } from "@/services/patients.api";
+import {
+  useGetPatientQuery,
+  useDeletePatientMutation, // Deactivate (no hide)
+  useRestorePatientMutation, // Reactivate legacy deleted
+  useSetPatientStatusMutation, // Activate when not deleted
+  useUploadPatientPhotoMutation,
+  useListPatientNotesQuery,
+  useAddPatientNoteMutation,
+} from "@/services/patients.api";
 import { fullName, calcAge } from "@/utils/patient";
-import { toAbsUrl } from "@/services/baseApi";
+import { API_BASE, toAbsUrl } from "@/services/baseApi";
 
 const Row = ({ label, value }) => (
   <div className="flex items-center justify-between py-2">
@@ -18,35 +26,39 @@ const Row = ({ label, value }) => (
   </div>
 );
 
-const CheckItem = ({ done, text }) => (
-  <div className="flex items-center justify-between py-2">
-    <span className="text-sm text-text-primary">{text}</span>
-    <span
-      className={[
-        "inline-flex h-5 w-5 items-center justify-center rounded-full",
-        done ? "bg-success text-white" : "bg-muted text-text-secondary",
-      ].join(" ")}
-      title={done ? "Completed" : "Pending"}>
-      {done ? <Icon name="Check" size={12} /> : <Icon name="Minus" size={12} />}
-    </span>
-  </div>
-);
-
 export default function PatientProfile() {
   const { id } = useParams();
-
   useEffect(() => {
     try {
       localStorage.setItem("lastPatientId", id || "");
     } catch {}
   }, [id]);
 
-  const { data, isLoading, isError, error } = useGetPatientQuery(id, {
-    skip: !id,
-  });
+  const token = useSelector((s) => s.auth.token);
+  const branchId = useSelector((s) => s.auth.branchId);
 
-  const patient = data || null;
+  const {
+    data: patient,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGetPatientQuery(id, { skip: !id });
+
   const pid = patient?._id || patient?.id || id;
+
+  const [deactivate, { isLoading: deactivating }] = useDeletePatientMutation();
+  const [restore, { isLoading: restoring }] = useRestorePatientMutation();
+  const [setStatus, { isLoading: settingStat }] = useSetPatientStatusMutation();
+  const [uploadPhoto, { isLoading: uploadingPh }] =
+    useUploadPatientPhotoMutation();
+  const [addNote, { isLoading: addingNote }] = useAddPatientNoteMutation();
+
+  const {
+    data: notesData,
+    isFetching: notesFetching,
+    refetch: refetchNotes,
+  } = useListPatientNotesQuery(pid, { skip: !pid });
 
   const photoSrc = useMemo(() => {
     const n = fullName(patient || {}) || "P";
@@ -54,6 +66,8 @@ export default function PatientProfile() {
       "https://api.dicebear.com/7.x/initials/svg?seed=" + encodeURIComponent(n);
     return toAbsUrl(patient?.photoUrl || "") || fallback;
   }, [patient]);
+
+  const fileRef = useRef(null);
 
   if (isLoading) {
     return (
@@ -84,6 +98,120 @@ export default function PatientProfile() {
 
   const age = calcAge(patient.dob);
   const displayName = fullName(patient);
+  const isInactive = String(patient.status).toLowerCase() !== "active";
+
+  // PRINT (no popup)
+  const handlePrint = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/patients/${pid}/print`, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(branchId ? { "X-Branch-Id": String(branchId) } : {}),
+        },
+      });
+      const html = await res.text();
+
+      if (!res.ok || html.trim().startsWith("{")) {
+        const msg = (() => {
+          try {
+            return JSON.parse(html)?.message;
+          } catch {
+            return "";
+          }
+        })();
+        alert(
+          `Failed to render print view (${res.status}). ${msg || ""}`.trim()
+        );
+        return;
+      }
+
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.setAttribute(
+        "sandbox",
+        "allow-modals allow-same-origin allow-scripts"
+      );
+      document.body.appendChild(iframe);
+      iframe.srcdoc = html;
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } finally {
+          setTimeout(() => document.body.removeChild(iframe), 1000);
+        }
+      };
+    } catch (e) {
+      console.error(e);
+      alert("Failed to render print view.");
+    }
+  };
+
+  // Actions
+  const handleDeactivate = async () => {
+    if (!window.confirm("Deactivate this patient?")) return;
+    try {
+      await deactivate(pid).unwrap(); // sets status: "inactive"
+      await refetch();
+      alert("Patient deactivated.");
+    } catch (e) {
+      console.error(e);
+      alert("Operation failed.");
+    }
+  };
+
+  const handleReactivate = async () => {
+    try {
+      if (patient.isDeleted) {
+        await restore(pid).unwrap(); // legacy: bring back from isDeleted
+      } else {
+        await setStatus({ id: pid, status: "active" }).unwrap(); // simple activate
+      }
+      await refetch();
+      alert("Patient reactivated.");
+    } catch (e) {
+      console.error(e);
+      alert("Operation failed.");
+    }
+  };
+
+  const handleAddNote = async () => {
+    const text = window.prompt("Enter a note about this patient:");
+    if (!text || !text.trim()) return;
+    try {
+      await addNote({ id: pid, text: text.trim() }).unwrap();
+      await refetchNotes();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to add note.");
+    }
+  };
+
+  const pickPhoto = () => fileRef.current?.click();
+  const onPhotoPicked = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\//i.test(file.type)) {
+      alert("Please choose an image file.");
+      return;
+    }
+    try {
+      await uploadPhoto({ id: pid, file }).unwrap();
+      await refetch();
+    } catch (err) {
+      console.error(err);
+      alert("Photo upload failed.");
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   return (
     <>
@@ -99,18 +227,17 @@ export default function PatientProfile() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline">
-            <Icon name="Printer" size={16} className="mr-2" />
-            Print Profile
+          <Button variant="outline" onClick={handlePrint}>
+            <Icon name="Printer" size={16} className="mr-2" /> Print Profile
           </Button>
           <Button asChild>
             <Link to={`/patients/${pid}/edit`}>
-              <Icon name="Edit" size={16} className="mr-2" />
-              Edit Details
+              <Icon name="Edit" size={16} className="mr-2" /> Edit Details
             </Link>
           </Button>
         </div>
       </div>
+
       {/* Header card */}
       <div className="mb-6 rounded-xl border bg-card p-6 shadow-healthcare">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -124,7 +251,7 @@ export default function PatientProfile() {
               <span
                 className={[
                   "absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-2 border-card",
-                  patient.status === "active" ? "bg-success" : "bg-muted",
+                  isInactive ? "bg-muted" : "bg-success",
                 ].join(" ")}
               />
             </div>
@@ -157,26 +284,56 @@ export default function PatientProfile() {
                   </>
                 )}
               </div>
+
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onPhotoPicked}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={pickPhoto}
+                  loading={uploadingPh}>
+                  <Icon name="ImagePlus" size={14} className="mr-2" /> Change
+                  Photo
+                </Button>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <Button variant="outline">
-              <Icon name="Calendar" size={16} className="mr-2" />
-              New Appointment
+              <Icon name="Calendar" size={16} className="mr-2" /> New
+              Appointment
             </Button>
-            <Button variant="outline">
-              <Icon name="FileText" size={16} className="mr-2" />
-              Add Note
+            <Button
+              variant="outline"
+              onClick={handleAddNote}
+              loading={addingNote}>
+              <Icon name="FileText" size={16} className="mr-2" /> Add Note
             </Button>
-            <Button variant="destructive">
-              <Icon name="Archive" size={16} className="mr-2" />
-              Deactivate
-            </Button>
+
+            {isInactive ? (
+              <Button
+                onClick={handleReactivate}
+                loading={restoring || settingStat}>
+                <Icon name="RotateCcw" size={16} className="mr-2" /> Reactivate
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={handleDeactivate}
+                loading={deactivating}>
+                <Icon name="Archive" size={16} className="mr-2" /> Deactivate
+              </Button>
+            )}
           </div>
         </div>
       </div>
-
       {/* Main grid */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2 space-y-6">
@@ -235,6 +392,7 @@ export default function PatientProfile() {
           </div>
         </div>
 
+        {/* Notes */}
         <div className="space-y-6">
           <div className="rounded-xl border bg-card p-5 shadow-healthcare">
             <h4 className="mb-2 text-sm font-medium text-text-secondary">
@@ -250,25 +408,32 @@ export default function PatientProfile() {
 
           <div className="rounded-xl border bg-card p-5 shadow-healthcare">
             <h4 className="mb-3 text-base font-semibold text-text-primary">
-              Registration Status
+              Notes
             </h4>
-            <div className="divide-y divide-border">
-              <CheckItem
-                done={Boolean(displayName)}
-                text="Personal details collected"
-              />
-              <CheckItem
-                done={Boolean(patient.phone || patient.email)}
-                text="Contact details added"
-              />
-              <CheckItem
-                done={Boolean(patient.insurance?.provider)}
-                text="Insurance verification pending"
-              />
-              <CheckItem
-                done={Boolean(patient.emergency?.phone)}
-                text="Emergency contacts added"
-              />
+            {notesFetching ? (
+              <div className="text-sm text-text-secondary">Loading…</div>
+            ) : (notesData?.length || 0) === 0 ? (
+              <div className="text-sm text-text-secondary">No notes yet.</div>
+            ) : (
+              <ul className="space-y-3">
+                {notesData.map((n) => (
+                  <li key={n._id} className="rounded border p-3">
+                    <div className="text-sm">{n.text}</div>
+                    <div className="mt-1 text-xs text-text-secondary">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                onClick={handleAddNote}
+                loading={addingNote}>
+                <Icon name="Plus" size={14} className="mr-1" />
+                Add Note
+              </Button>
             </div>
           </div>
         </div>

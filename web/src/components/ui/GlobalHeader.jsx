@@ -1,5 +1,4 @@
-// apps/web/src/components/ui/GlobalHeader.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import Icon from "../AppIcon";
@@ -8,17 +7,16 @@ import { cn } from "../../utils/cn";
 import { signOut } from "@/store/slices/authSlice";
 import { api } from "@/services/baseApi";
 import usePermChecker from "@/hooks/usePermChecker";
-
-// Current user (returns .photoUrl/.fullName/.initials)
 import useCurrentUser from "@/hooks/useCurrentUser";
 import ImgWithFallback from "../ImgWithFallback";
 
-/**
- * GlobalHeader
- * - Top app bar with burger (mobile), primary navigation, notifications, and profile
- * - Mirrors the major sections from RoutesApp.jsx
- * - All menu entries are permission-aware
- */
+import {
+  useListNotificationsQuery,
+  useUnreadCountQuery,
+  useMarkReadMutation,
+  useMarkAllReadMutation,
+} from "@/services/notifications.api";
+
 export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -31,21 +29,36 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
   const hasPerm = usePermChecker();
   const { user, isLoading: userLoading } = useCurrentUser();
 
-  // Demo notifications – plug into real API later
-  const notifications = useMemo(
-    () => [
-      { id: 1, type: "critical", message: "Lab results ready", time: "2m" },
-      { id: 2, type: "warning", message: "Medication interaction", time: "5m" },
-      {
-        id: 3,
-        type: "info",
-        message: "Appointment reminder 3:00 PM",
-        time: "10m",
-      },
-    ],
-    []
+  // Unread count (lightweight)
+  const { data: unreadCount = 0 } = useUnreadCountQuery(undefined, {
+    pollingInterval: 15000,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
+
+  // Unread list for dropdown
+  const { data: unreadList } = useListNotificationsQuery(
+    { unreadOnly: 1, page: 1, limit: 5 }, // numeric "1" is important
+    {
+      pollingInterval: 15000,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    }
   );
-  const unreadCount = notifications.length;
+  const [markRead] = useMarkReadMutation();
+  const [markAllRead] = useMarkAllReadMutation();
+  const items = unreadList?.items || [];
+
+  const handleMarkOne = async (id) => {
+    try {
+      await markRead(id).unwrap();
+    } catch {}
+  };
+  const handleMarkAll = async () => {
+    try {
+      await markAllRead().unwrap();
+    } catch {}
+  };
 
   const handleSignOut = React.useCallback(() => {
     try {
@@ -66,7 +79,7 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     navigate("/login", { replace: true });
   }, [dispatch, navigate, onSignOut]);
 
-  // Close dropdowns on outside click / ESC
+  // Close dropdowns on click-outside / ESC
   useEffect(() => {
     const onDocClick = (e) => {
       if (
@@ -98,13 +111,12 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     };
   }, [notificationOpen, profileOpen]);
 
-  // Close any open menus when the route changes
+  // Close when route changes
   useEffect(() => {
     setNotificationOpen(false);
     setProfileOpen(false);
   }, [location.pathname]);
 
-  // Top app bar links → common sections
   const mainNav = [
     { to: "/dashboard", label: "Dashboard" },
     { to: "/patients", label: "Patients", requirePerm: "patient.read" },
@@ -117,8 +129,6 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     { to: "/billing", label: "Billing", requirePerm: "billing.invoice" },
     { to: "/inventory", label: "Inventory", requirePerm: "inv.item" },
   ];
-
-  // “More” menu → the rest (aligns with RoutesApp & Sidebar)
   const moreNav = [
     { to: "/lab", label: "Lab", requirePerm: "lab.order" },
     { to: "/radiology", label: "Radiology", requirePerm: "rad.order" },
@@ -152,7 +162,6 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     },
     { to: "/help", label: "Help" },
   ];
-
   const visibleMainNav = mainNav.filter(
     (i) => !i.requirePerm || hasPerm(i.requirePerm)
   );
@@ -160,7 +169,6 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
     (i) => !i.requirePerm || hasPerm(i.requirePerm)
   );
 
-  // Avatars with graceful fallback
   const smallFallback = (
     <div className="grid h-9 w-9 place-content-center rounded-full bg-gray-300 text-white">
       <span className="text-xs font-semibold">{user?.initials || "U"}</span>
@@ -291,39 +299,64 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
               <div
                 role="menu"
                 className="absolute right-0 mt-2 w-80 overflow-hidden rounded-xl border bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900">
-                <div className="border-b px-4 py-3 dark:border-gray-800">
+                <div className="flex items-center justify-between border-b px-4 py-3 dark:border-gray-800">
                   <h3 className="font-medium text-gray-900 dark:text-white">
                     Notifications
                   </h3>
+                  {items.length > 0 && (
+                    <button
+                      className="text-xs font-medium text-emerald-700 hover:underline"
+                      onClick={handleMarkAll}>
+                      Mark all read
+                    </button>
+                  )}
                 </div>
+
                 <ul className="max-h-96 overflow-y-auto">
-                  {notifications.map((n) => (
-                    <li
-                      key={n.id}
-                      className="border-b px-4 py-3 last:border-b-0 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60">
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={cn(
-                            "mt-1 h-2.5 w-2.5 rounded-full",
-                            n.type === "critical"
-                              ? "bg-red-600"
-                              : n.type === "warning"
-                              ? "bg-amber-500"
-                              : "bg-blue-600"
-                          )}
-                        />
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-900 dark:text-gray-100">
-                            {n.message}
-                          </p>
-                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            {n.time}
-                          </p>
-                        </div>
-                      </div>
+                  {items.length === 0 ? (
+                    <li className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+                      You’re all caught up.
                     </li>
-                  ))}
+                  ) : (
+                    items.map((n) => (
+                      <li
+                        key={n._id}
+                        className="border-b px-4 py-3 last:border-b-0 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60">
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={cn(
+                              "mt-1 h-2.5 w-2.5 rounded-full",
+                              n.severity === "error"
+                                ? "bg-red-600"
+                                : n.severity === "warning"
+                                ? "bg-amber-500"
+                                : "bg-blue-600"
+                            )}
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-900 dark:text-gray-100">
+                              {n.title || n.message || n.kind}
+                            </p>
+                            {n.message && (
+                              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                {n.message}
+                              </p>
+                            )}
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(n.createdAt).toLocaleTimeString()}
+                            </p>
+                          </div>
+                          <button
+                            className="ml-2 rounded-md px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            onClick={() => handleMarkOne(n._id)}>
+                            Mark read
+                          </button>
+                        </div>
+                      </li>
+                    ))
+                  )}
                 </ul>
+
                 <div className="p-4">
                   <Button
                     asChild
@@ -375,11 +408,6 @@ export default function GlobalHeader({ onSidebarToggle, onSignOut }) {
                       {user?.profession && (
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                           {user.profession}
-                        </p>
-                      )}
-                      {user?.shiftLabel && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {user.shiftLabel}
                         </p>
                       )}
                     </div>

@@ -58,14 +58,14 @@ const NavigationSidebar = (props) => {
             icon: "UserPlus",
             requirePerm: "patient.write",
           },
-          lastPatientId
-            ? {
-                label: "Patient Profile",
-                path: `/patients/${lastPatientId}`,
-                icon: "IdCard",
-                requirePerm: "patient.read",
-              }
-            : null,
+          // lastPatientId
+          //   ? {
+          //       label: "Patient Profile",
+          //       path: `/patients/${lastPatientId}`,
+          //       icon: "IdCard",
+          //       requirePerm: "patient.read",
+          //     }
+          //   : null,
           {
             label: "Patient Medical Record",
             path: "/patients/patient-medical-record",

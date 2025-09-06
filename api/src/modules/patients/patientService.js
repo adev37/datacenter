@@ -1,9 +1,8 @@
 // ESM
 import MRNCounter from "./mrnCounterModel.js";
 import * as repo from "./patientRepository.js";
-import PatientNote from "./patientNoteModel.js"; // ← relative path to avoid alias resolution issues
+import PatientNote from "./patientNoteModel.js";
 
-// MRN generator (per-branch)
 async function generateMRN(branchId) {
   const year = new Date().getFullYear();
   const { seq } = await MRNCounter.findOneAndUpdate(
@@ -28,12 +27,29 @@ export const getPatient = ({ branchId = null, id }) => repo.byId(id, branchId);
 
 export const listPatients = (args) => repo.search(args);
 
+/** Deactivate = status: 'inactive' (does not hide) */
 export const softDeletePatient = async ({ id, branchId = null, by }) => {
-  const r = await repo.markDeleted(id, branchId, by);
-  return r.modifiedCount > 0;
+  const doc = await repo.setStatusById(id, branchId, "inactive", {
+    deactivatedAt: new Date(),
+    deactivatedBy: by,
+  });
+  return !!doc; // true if found & updated
 };
 
-/* ---------------- Notes (optional) ---------------- */
+/** Reactivate = status: 'active' (works even if previously deactivated) */
+export const restorePatient = async ({ id, branchId = null, by }) =>
+  repo.setStatusById(id, branchId, "active", {
+    restoredAt: new Date(),
+    restoredBy: by,
+  });
+
+/** Optional: real archive/unarchive if you ever add an “Archive” button */
+export const archivePatient = ({ id, branchId = null, by }) =>
+  repo.markDeleted(id, branchId, by);
+export const unarchivePatient = ({ id, branchId = null, by }) =>
+  repo.restoreFromDeleted(id, branchId, by);
+
+/* ---------------- Notes ---------------- */
 export const listNotes = ({ patientId, branchId = null }) =>
   PatientNote.find({ patientId, ...(branchId ? { branchId } : {}) })
     .sort({ createdAt: -1 })

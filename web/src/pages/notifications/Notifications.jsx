@@ -6,11 +6,16 @@ import Icon from "@/components/AppIcon";
 import {
   useListNotificationsQuery,
   useMarkReadMutation,
+  useMarkAllReadMutation,
 } from "@/services/notifications.api";
 
 export default function Notifications() {
-  const { data, isLoading, isError } = useListNotificationsQuery();
-  const [markRead] = useMarkReadMutation();
+  const { data, isLoading, isError, refetch } = useListNotificationsQuery(
+    { page: 1, limit: 50 }, // page shows ALL by default
+    { refetchOnMountOrArgChange: true }
+  );
+  const [markRead, { isLoading: marking }] = useMarkReadMutation();
+  const [markAllRead, { isLoading: markingAll }] = useMarkAllReadMutation();
 
   if (isLoading) {
     return (
@@ -41,6 +46,20 @@ export default function Notifications() {
       <NavigationBreadcrumb />
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Notifications</h1>
+        {items.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                await markAllRead().unwrap();
+                refetch(); // refresh page list to show them as read
+              } catch {}
+            }}
+            loading={markingAll}>
+            <Icon name="CheckCheck" size={16} className="mr-2" />
+            Mark all read
+          </Button>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card shadow-healthcare">
@@ -60,18 +79,32 @@ export default function Notifications() {
                   />
                   <div>
                     <div className="text-sm font-medium text-text-primary">
-                      {n.title || n.type}
+                      {n.title || n.kind}
                     </div>
-                    <div className="text-xs text-text-secondary">
-                      {n.message}
+                    {n.message && (
+                      <div className="text-xs text-text-secondary">
+                        {n.message}
+                      </div>
+                    )}
+                    <div className="mt-0.5 text-xs text-text-secondary">
+                      {new Date(
+                        n.createdAt || n.updatedAt || Date.now()
+                      ).toLocaleString()}
                     </div>
                   </div>
                 </div>
+
                 {!n.readAt && (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => markRead(n._id)}>
+                    onClick={async () => {
+                      try {
+                        await markRead(n._id).unwrap();
+                        refetch();
+                      } catch {}
+                    }}
+                    loading={marking}>
                     Mark read
                   </Button>
                 )}

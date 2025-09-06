@@ -2,13 +2,11 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { loadAuth } from "@/utils/authStorage";
 import { signOut } from "@/store/slices/authSlice";
 
-// Canonical API base (supports absolute VITE_API_BASE or relative `/api/v1`)
 export const API_BASE = (import.meta.env.VITE_API_BASE || "/api/v1").replace(
   /\/+$/,
   ""
 );
 
-// Figure out the origin where the API is served (for static files like /uploads)
 export const API_ORIGIN = (() => {
   try {
     return new URL(API_BASE, window.location.origin).origin;
@@ -17,7 +15,6 @@ export const API_ORIGIN = (() => {
   }
 })();
 
-// Make any path absolute on the API origin; leaves http(s) URLs alone
 export function toAbsUrl(path) {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
@@ -25,7 +22,6 @@ export function toAbsUrl(path) {
   return `${API_ORIGIN}${p}`;
 }
 
-// Plain baseQuery with headers
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: API_BASE,
   credentials: "include",
@@ -40,7 +36,6 @@ const rawBaseQuery = fetchBaseQuery({
   },
 });
 
-// Thin wrapper: on 401 → sign out (no auto-refresh flow here)
 const baseQueryWithAuthGuard = async (args, api, extraOptions) => {
   const res = await rawBaseQuery(args, api, extraOptions);
   if (res?.error?.status === 401) {

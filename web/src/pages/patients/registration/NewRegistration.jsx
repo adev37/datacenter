@@ -1,3 +1,4 @@
+// apps/web/src/pages/patients/NewRegistration.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -8,8 +9,10 @@ import Select from "@/components/ui/Select";
 import Icon from "@/components/AppIcon";
 import Image from "@/components/AppImage";
 
-import { useCreatePatientMutation } from "@/services/patients.api";
-import { API_BASE } from "@/services/baseApi";
+import {
+  useCreatePatientMutation,
+  useUploadPatientPhotoMutation, // <-- use RTKQ for photo too
+} from "@/services/patients.api";
 
 /* --------------------------------- UI bits -------------------------------- */
 const StepDot = ({ active, number, title, subtitle }) => (
@@ -35,7 +38,6 @@ function isValidDateStr(yyyy_mm_dd) {
   return !isNaN(+d) && yyyy_mm_dd.length >= 10;
 }
 function clean(obj) {
-  // remove undefined, null, and "" (but keep 0/false)
   const out = {};
   Object.entries(obj || {}).forEach(([k, v]) => {
     if (v === undefined || v === null) return;
@@ -49,6 +51,7 @@ function clean(obj) {
 export default function NewRegistration() {
   const navigate = useNavigate();
   const [createPatient, { isLoading: creating }] = useCreatePatientMutation();
+  const [uploadPhoto] = useUploadPatientPhotoMutation(); // <-- NEW
 
   const [step, setStep] = useState(1);
 
@@ -79,7 +82,7 @@ export default function NewRegistration() {
     emergencyPhone: "",
   });
 
-  const [previewUrl, setPreviewUrl] = useState(""); // for URL.revokeObjectURL
+  const [previewUrl, setPreviewUrl] = useState("");
   useEffect(() => {
     if (!form.photo) {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -96,12 +99,11 @@ export default function NewRegistration() {
   const [saving, setSaving] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
 
-  // warn on close if unsaved
   useEffect(() => {
     const onBeforeUnload = (e) => {
       if (!unsaved) return;
       e.preventDefault();
-      e.returnValue = ""; // required for some browsers
+      e.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
@@ -122,13 +124,12 @@ export default function NewRegistration() {
 
   const errors = useMemo(() => {
     const e = {};
-    // Step 1
     if (!form.firstName?.trim()) e.firstName = "First name is required";
     if (!form.lastName?.trim()) e.lastName = "Last name is required";
     if (!form.dob?.trim()) e.dob = "Date of birth is required";
     else if (!isValidDateStr(form.dob)) e.dob = "Enter a valid date";
     if (!form.gender?.trim()) e.gender = "Gender is required";
-    // Step 2
+
     if (step >= 2) {
       if (!form.phone?.trim()) e.phone = "Phone is required";
       if (!form.address1?.trim()) e.address1 = "Address is required";
@@ -136,7 +137,6 @@ export default function NewRegistration() {
       if (form.email?.trim() && !/^\S+@\S+\.\S+$/.test(form.email))
         e.email = "Invalid email";
     }
-    // Step 4
     if (step >= 4) {
       if (!form.emergencyPhone?.trim())
         e.emergencyPhone = "Emergency phone is required";
@@ -202,7 +202,7 @@ export default function NewRegistration() {
 
   /* ------------------------------ submission ------------------------------- */
   const handleSubmit = async () => {
-    if (creating) return; // double-submit guard
+    if (creating) return;
     try {
       const payload = clean({
         firstName: form.firstName.trim(),
@@ -240,24 +240,16 @@ export default function NewRegistration() {
             : undefined,
       });
 
-      const created = await createPatient(payload).unwrap(); // { _id, mrn, ... }
+      // 1) Create patient
+      const created = await createPatient(payload).unwrap();
       const patientId = created._id || created.id;
 
+      // 2) Upload photo (via RTKQ so auth + branch headers are included)
       if (patientId && form.photo) {
         try {
-          const fd = new FormData();
-          fd.append("photo", form.photo);
-          const res = await fetch(`${API_BASE}/patients/${patientId}/photo`, {
-            method: "POST",
-            credentials: "include",
-            body: fd,
-          });
-          // non-fatal if upload fails
-          if (!res.ok) {
-            // you can log or toast here if you have a toast system
-          }
+          await uploadPhoto({ id: patientId, file: form.photo }).unwrap();
         } catch {
-          // ignore upload error; continue to navigate
+          // Non-fatal: continue even if upload fails
         }
       }
 
@@ -337,9 +329,9 @@ export default function NewRegistration() {
         </div>
       </div>
 
-      {/* main grid (content depends on step) */}
+      {/* main grid */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* LEFT: changing card per step */}
+        {/* LEFT: step content */}
         <div className="lg:col-span-2 rounded-xl border bg-card p-5 shadow-healthcare">
           {step === 1 && (
             <>
