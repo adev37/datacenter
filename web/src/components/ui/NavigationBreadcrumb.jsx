@@ -3,42 +3,30 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import Icon from "../AppIcon";
 
-/**
- * Breadcrumbs for:
- * /dashboard
- * /patients, /patients/new, /patients/:id, /portal/patient
- * /appointments, /appointments/calendar
- * /encounters, /encounters/(soap|vitals|orders|prescriptions)
- * /billing/(invoices|payments)
- * /inventory/(items|grn|transfer|ledger)
- * /lab, /lab/(samples|results)
- * /radiology/(viewer|reports)
- * /pharmacy
- * /ipd/(admissions|bedboard|emar)
- * /reports/(finance|clinical|inventory)
- * /staff/(doctors|nurses|schedules)
- * /settings/(user-management|role-permissions|departments|preferences)
- * /login, /register
- * /notifications, /help
- */
 const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
   const location = useLocation();
 
+  const Wrapper = ({ children }) => (
+    <nav
+      className="mb-4 sm:mb-6 flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-text-secondary
+                 flex-wrap overflow-x-auto whitespace-nowrap"
+      aria-label="Breadcrumb">
+      {children}
+    </nav>
+  );
+
   if (customBreadcrumbs) {
     return (
-      <nav
-        className="mb-6 flex items-center space-x-2 text-sm text-text-secondary"
-        aria-label="Breadcrumb">
-        <Icon name="Home" size={16} className="text-text-secondary" />
+      <Wrapper>
+        {/* slightly bigger icon */}
+        <Icon name="Home" size={20} className="text-text-secondary shrink-0" />
         {customBreadcrumbs.map((bc, i) => (
           <React.Fragment key={bc.path ?? i}>
-            {i > 0 && (
-              <Icon
-                name="ChevronRight"
-                size={14}
-                className="text-text-secondary"
-              />
-            )}
+            <Icon
+              name="ChevronRight"
+              size={18}
+              className="text-text-secondary shrink-0"
+            />
             {bc.path ? (
               <Link
                 to={bc.path}
@@ -54,7 +42,7 @@ const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
             )}
           </React.Fragment>
         ))}
-      </nav>
+      </Wrapper>
     );
   }
 
@@ -87,67 +75,43 @@ const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
       ":id": "Patient Profile",
       "patient-medical-record": "Patient Medical Record",
     },
-    appointments: {
-      calendar: "Calendar",
-    },
+    appointments: { calendar: "Calendar" },
     encounters: {
       soap: "SOAP Notes",
       vitals: "Vitals",
       orders: "Orders",
       prescriptions: "Prescriptions",
     },
-    billing: {
-      invoices: "Invoices",
-      payments: "Payments",
-    },
+    billing: { invoices: "Invoices", payments: "Payments" },
     inventory: {
       items: "Items",
       grn: "GRN",
       transfer: "Stock Transfer",
       ledger: "Ledger",
     },
-    lab: {
-      samples: "Sample Collection",
-      results: "Results Entry",
-    },
-    radiology: {
-      viewer: "Study Viewer",
-      reports: "Reports",
-    },
-    pharmacy: {
-      dispense: "Dispense",
-    },
-    ipd: {
-      admissions: "Admissions",
-      bedboard: "Bed Board",
-      emar: "eMAR",
-    },
+    lab: { samples: "Sample Collection", results: "Results Entry" },
+    radiology: { viewer: "Study Viewer", reports: "Reports" },
+    pharmacy: { dispense: "Dispense" },
+    ipd: { admissions: "Admissions", bedboard: "Bed Board", emar: "eMAR" },
     reports: {
       finance: "Finance Reports",
       clinical: "Clinical Reports",
       inventory: "Inventory Reports",
     },
-    staff: {
-      doctors: "Doctors",
-      nurses: "Nurses",
-      schedules: "Schedules",
-    },
+    staff: { doctors: "Doctors", nurses: "Nurses", schedules: "Schedules" },
     settings: {
       "user-management": "User Management",
       "role-permissions": "Role Permissions",
       departments: "Departments",
       preferences: "Preferences",
     },
-    portal: {
-      patient: "Patient",
-    },
+    portal: { patient: "Patient" },
   };
 
   const parts = pathname.split("/").filter(Boolean);
   const [section, sub, sub2] = parts;
 
-  if (!section) return null; // root → likely redirecting to /dashboard
-  if (pathname === "/dashboard") return null; // hide on main dashboard
+  if (!section || pathname === "/dashboard") return null;
 
   const baseCrumbs = [];
   const sectionLabel =
@@ -158,14 +122,11 @@ const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
   if (sub) {
     let subLabel;
     const map = subMap[section] || {};
-
-    if (map[sub]) {
-      subLabel = map[sub];
-    } else if (/^\d+$/.test(sub) || sub.length >= 8) {
+    if (map[sub]) subLabel = map[sub];
+    else if (/^\d+$/.test(sub) || sub.length >= 8)
       subLabel = map[":id"] || "Details";
-    } else {
+    else
       subLabel = sub.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-    }
     baseCrumbs.push({ label: subLabel, path: `${sectionPath}/${sub}` });
   }
 
@@ -181,10 +142,8 @@ const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
   );
 
   return (
-    <nav
-      className="mb-6 flex items-center space-x-2 text-sm text-text-secondary"
-      aria-label="Breadcrumb">
-      <Icon name="Home" size={16} className="text-text-secondary" />
+    <Wrapper>
+      <Icon name="Home" size={20} className="text-text-secondary shrink-0" />
       <Link
         to="/dashboard"
         className="hover:text-text-primary healthcare-transition">
@@ -192,7 +151,11 @@ const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
       </Link>
       {crumbs.map((bc, index) => (
         <React.Fragment key={`${bc.label}-${index}`}>
-          <Icon name="ChevronRight" size={14} className="text-text-secondary" />
+          <Icon
+            name="ChevronRight"
+            size={18}
+            className="text-text-secondary shrink-0"
+          />
           {bc.path ? (
             <Link
               to={bc.path}
@@ -206,7 +169,7 @@ const NavigationBreadcrumb = ({ customBreadcrumbs = null }) => {
           )}
         </React.Fragment>
       ))}
-    </nav>
+    </Wrapper>
   );
 };
 

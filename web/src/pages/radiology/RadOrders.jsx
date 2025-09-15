@@ -1,2 +1,4 @@
 // RadOrders.jsx
-export default function RadOrders(){return null}
+export default function RadOrders() {
+  return null;
+}

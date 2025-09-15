@@ -1,3 +1,4 @@
+// apps/web/src/pages/patients/PatientList.jsx
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
@@ -7,7 +8,7 @@ import Select from "@/components/ui/Select";
 import Icon from "@/components/AppIcon";
 import Image from "@/components/AppImage";
 
-import { useListPatientsQuery } from "@/services/patients.api"; // ← note the .api
+import { useListPatientsQuery } from "@/services/patients.api";
 import { calcAge, fullName } from "@/utils/patient";
 
 /* --------------------------------- helpers -------------------------------- */
@@ -64,7 +65,7 @@ export default function PatientList() {
   const sorters = [
     { value: "name", label: "Name (A–Z)" },
     { value: "mrn", label: "MRN" },
-    { value: "lastVisit", label: "Last Visit (desc)" }, // backend can map to updatedAt
+    { value: "lastVisit", label: "Last Visit (desc)" },
   ];
 
   // server params
@@ -89,7 +90,7 @@ export default function PatientList() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const goto = (n) => setPage(Math.min(Math.max(1, n), totalPages));
 
-  // normalize rows to render exactly like the screenshot
+  // normalize rows
   const rows = (data?.items || []).map((p) => {
     const name = fullName(p) || "—";
     const img =
@@ -103,11 +104,35 @@ export default function PatientList() {
       age: calcAge(p.dob),
       gender: p.gender || "—",
       phone: p.phone || "—",
-      lastVisit: "—", // placeholder until backend provides
+      lastVisit: "—",
       status: p.status || "active",
       photo: img,
     };
   });
+
+  // Export current page to XLSX
+  const handleExport = async () => {
+    try {
+      const XLSX = await import("xlsx");
+      const exportRows = rows.map((r) => ({
+        MRN: r.mrn,
+        Name: r.name,
+        Age: r.age ?? "",
+        Gender: r.gender || "",
+        Phone: r.phone || "",
+        "Last Visit": r.lastVisit || "",
+        Status: r.status || "",
+        ID: r.id,
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Patients");
+      XLSX.writeFile(wb, "patients.xlsx");
+    } catch (e) {
+      console.error(e);
+      alert("Export failed. Make sure 'xlsx' is installed in the project.");
+    }
+  };
 
   return (
     <>
@@ -122,7 +147,10 @@ export default function PatientList() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            title="Export current page to XLSX">
             <Icon name="Download" size={16} className="mr-2" />
             Export
           </Button>
@@ -169,8 +197,9 @@ export default function PatientList() {
         </div>
       </div>
 
-      {/* table */}
-      <div className="overflow-hidden rounded-xl border bg-card shadow-healthcare">
+      {/* table + pagination */}
+      {/* CHANGED: outer card uses overflow-visible so the Select dropdowns are not clipped */}
+      <div className="rounded-xl border bg-card shadow-healthcare overflow-visible">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted">
@@ -311,7 +340,7 @@ export default function PatientList() {
           </table>
         </div>
 
-        {/* pagination */}
+        {/* pagination (Select dropdown will no longer be clipped) */}
         <div className="flex flex-col items-center justify-between gap-3 border-t border-border p-3 sm:flex-row">
           <div className="text-sm text-text-secondary">
             Showing{" "}

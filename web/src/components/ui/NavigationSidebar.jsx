@@ -1,15 +1,11 @@
 // apps/web/src/components/ui/NavigationSidebar.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Icon from "../AppIcon";
 import Button from "./Button";
 import HospitalContextCard from "./HospitalContextCard";
 import usePermChecker from "@/hooks/usePermChecker";
 
-/**
- * Sidebar driven by a route-aware config and filtered by permissions.
- * SUPER_ADMIN can() should always return true for every perm.
- */
 const NavigationSidebar = (props) => {
   const collapsed = props.collapsed ?? props.isCollapsed ?? false;
   const onToggle = props.onCollapsedChange ?? props.onToggle ?? (() => {});
@@ -17,18 +13,22 @@ const NavigationSidebar = (props) => {
   const navigate = useNavigate();
   const can = usePermChecker();
 
-  const isActive = (base) =>
-    location.pathname === base || location.pathname.startsWith(`${base}/`);
+  const isActive = useCallback(
+    (base) =>
+      location.pathname === base || location.pathname.startsWith(`${base}/`),
+    [location.pathname]
+  );
 
-  const lastPatientId =
-    typeof window !== "undefined"
-      ? localStorage.getItem("lastPatientId")
-      : null;
+  const [lastPatientId, setLastPatientId] = useState(null);
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined")
+        setLastPatientId(localStorage.getItem("lastPatientId"));
+    } catch {}
+  }, []);
 
-  // 1) Raw menu model — mirrors RoutesApp.jsx
   const rawItems = useMemo(
     () => [
-      // --- Dashboard ---------------------------------------------------------
       {
         label: "Dashboard",
         path: "/dashboard",
@@ -38,8 +38,6 @@ const NavigationSidebar = (props) => {
           { label: "Admin Dashboard", path: "/dashboard", icon: "Gauge" },
         ],
       },
-
-      // --- Patients ----------------------------------------------------------
       {
         label: "Patients",
         path: "/patients",
@@ -58,14 +56,6 @@ const NavigationSidebar = (props) => {
             icon: "UserPlus",
             requirePerm: "patient.write",
           },
-          // lastPatientId
-          //   ? {
-          //       label: "Patient Profile",
-          //       path: `/patients/${lastPatientId}`,
-          //       icon: "IdCard",
-          //       requirePerm: "patient.read",
-          //     }
-          //   : null,
           {
             label: "Patient Medical Record",
             path: "/patients/patient-medical-record",
@@ -74,8 +64,6 @@ const NavigationSidebar = (props) => {
           },
         ].filter(Boolean),
       },
-
-      // --- Appointments ------------------------------------------------------
       {
         label: "Appointments",
         path: "/appointments",
@@ -96,8 +84,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Medical Records / Encounters -------------------------------------
       {
         label: "Medical Records",
         path: "/encounters",
@@ -136,8 +122,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Lab ---------------------------------------------------------------
       {
         label: "Lab",
         path: "/lab",
@@ -164,8 +148,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Radiology ---------------------------------------------------------
       {
         label: "Radiology",
         path: "/radiology",
@@ -192,8 +174,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Pharmacy ----------------------------------------------------------
       {
         label: "Pharmacy",
         path: "/pharmacy",
@@ -202,14 +182,12 @@ const NavigationSidebar = (props) => {
         children: [
           {
             label: "Dispense",
-            path: "/pharmacy/dispense", // ← fix to match route
+            path: "/pharmacy/dispense",
             icon: "PackageOpen",
             requirePerm: "pharmacy.dispense",
           },
         ],
       },
-
-      // --- IPD ---------------------------------------------------------------
       {
         label: "IPD",
         path: "/ipd",
@@ -236,8 +214,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Billing -----------------------------------------------------------
       {
         label: "Billing",
         path: "/billing",
@@ -258,8 +234,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Inventory ---------------------------------------------------------
       {
         label: "Inventory",
         path: "/inventory",
@@ -292,8 +266,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Reports -----------------------------------------------------------
       {
         label: "Reports",
         path: "/reports",
@@ -320,8 +292,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Staff -------------------------------------------------------------
       {
         label: "Staff",
         path: "/staff",
@@ -348,19 +318,13 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Settings ----------------------------------------------------------
       {
         label: "Settings",
         path: "/settings",
         icon: "Settings",
         description: "System configuration",
         children: [
-          {
-            label: "Profile",
-            path: "/settings/profile",
-            icon: "User",
-          },
+          { label: "Profile", path: "/settings/profile", icon: "User" },
           {
             label: "User Management",
             path: "/settings/user-management",
@@ -399,8 +363,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Portal ------------------------------------------------------------
       {
         label: "Portal",
         path: "/portal",
@@ -415,8 +377,6 @@ const NavigationSidebar = (props) => {
           },
         ],
       },
-
-      // --- Help & Notifications ----------------------------------------------
       {
         label: "Help & Notifications",
         path: "/help",
@@ -436,23 +396,23 @@ const NavigationSidebar = (props) => {
     [lastPatientId]
   );
 
-  // 2) Permission filtering
-  const items = useMemo(() => {
-    return rawItems
-      .map((g) => {
-        const children = (g.children || []).filter(
-          (c) => !c.requirePerm || can(c.requirePerm)
-        );
-        const groupVisible =
-          children.length > 0 ||
-          ((g.children || []).length === 0 &&
-            (!g.requirePerm || can(g.requirePerm)));
-        return groupVisible ? { ...g, children } : null;
-      })
-      .filter(Boolean);
-  }, [rawItems, can]);
+  const items = useMemo(
+    () =>
+      rawItems
+        .map((g) => {
+          const children = (g.children || []).filter(
+            (c) => !c.requirePerm || can(c.requirePerm)
+          );
+          const groupVisible =
+            children.length > 0 ||
+            ((g.children || []).length === 0 &&
+              (!g.requirePerm || can(g.requirePerm)));
+          return groupVisible ? { ...g, children } : null;
+        })
+        .filter(Boolean),
+    [rawItems, can]
+  );
 
-  // 3) Expand/collapse state derived from current route
   const defaultExpanded = useMemo(() => {
     const map = {};
     items.forEach((it) => {
@@ -460,29 +420,32 @@ const NavigationSidebar = (props) => {
         map[it.path] = it.children.some((c) => isActive(c.path));
     });
     return map;
-  }, [items, location.pathname]);
+  }, [items, isActive]);
 
   const [expanded, setExpanded] = useState(defaultExpanded);
   useEffect(() => setExpanded(defaultExpanded), [defaultExpanded]);
+
   const toggleGroup = (path) =>
     setExpanded((s) => ({ ...s, [path]: !s?.[path] }));
 
   return (
     <>
+      {/* Desktop / large tablets (hidden on small) */}
       <aside
-        className={`fixed left-0 top-16 bottom-0 z-40 hidden lg:block bg-white border-r transition-all ${
-          collapsed ? "w-16" : "w-72"
-        }`}>
+        className={`fixed left-0 top-16 bottom-0 z-40 hidden lg:block bg-white border-r transition-all
+        ${collapsed ? "lg:w-16 xl:w-20" : "lg:w-64 xl:w-72"}`}>
         <div className="flex h-full min-h-0 flex-col">
           <div className="border-b p-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onToggle(!collapsed)}
-              className="w-full justify-center">
+              className="w-full justify-center"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+              {/* slightly larger */}
               <Icon
                 name={collapsed ? "ChevronRight" : "ChevronLeft"}
-                size={20}
+                size={22}
               />
             </Button>
           </div>
@@ -490,10 +453,11 @@ const NavigationSidebar = (props) => {
           {/* Scrollable menu body */}
           <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 p-3 pr-2">
             {items.map((item) => {
-              const active = isActive(item.path);
               const hasChildren = !!item.children?.length;
+              const groupActive =
+                isActive(item.path) ||
+                item.children?.some((c) => isActive(c.path));
 
-              // Collapsed OR leaf nodes
               if (collapsed || !hasChildren) {
                 return (
                   <Link
@@ -501,22 +465,23 @@ const NavigationSidebar = (props) => {
                     to={item.path}
                     className={[
                       "group flex items-center gap-3 rounded-lg px-3 py-3 transition-colors",
-                      active
+                      groupActive
                         ? "bg-blue-600 text-white shadow-sm"
                         : "text-gray-700 hover:bg-gray-100",
                     ].join(" ")}
                     title={collapsed ? item.label : ""}>
+                    {/* icon slightly bigger */}
                     <Icon
                       name={item.icon}
-                      size={20}
-                      className={active ? "text-white" : "text-gray-700"}
+                      size={22}
+                      className={groupActive ? "text-white" : "text-gray-700"}
                     />
                     {!collapsed && (
                       <div className="min-w-0">
                         <p className="truncate font-medium">{item.label}</p>
                         <p
                           className={`truncate text-xs ${
-                            active ? "text-white/90" : "text-gray-500"
+                            groupActive ? "text-white/90" : "text-gray-500"
                           }`}>
                           {item.description}
                         </p>
@@ -526,40 +491,44 @@ const NavigationSidebar = (props) => {
                 );
               }
 
-              const open = expanded[item.path];
+              const open = !!expanded[item.path];
               return (
                 <div key={item.path}>
                   <button
                     onClick={() => toggleGroup(item.path)}
                     className={[
                       "group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors",
-                      active
+                      groupActive
                         ? "bg-blue-600 text-white shadow-sm"
                         : "text-gray-700 hover:bg-gray-100",
-                    ].join(" ")}>
+                    ].join(" ")}
+                    aria-expanded={open}
+                    aria-controls={`group-${item.path}`}>
                     <Icon
                       name={item.icon}
-                      size={20}
-                      className={active ? "text-white" : "text-gray-700"}
+                      size={22}
+                      className={groupActive ? "text-white" : "text-gray-700"}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{item.label}</p>
                       <p
                         className={`truncate text-xs ${
-                          active ? "text-white/90" : "text-gray-500"
+                          groupActive ? "text-white/90" : "text-gray-500"
                         }`}>
                         {item.description}
                       </p>
                     </div>
                     <Icon
                       name={open ? "ChevronUp" : "ChevronDown"}
-                      size={16}
-                      className={active ? "text-white" : "text-gray-500"}
+                      size={18}
+                      className={groupActive ? "text-white" : "text-gray-500"}
                     />
                   </button>
 
                   {open && (
-                    <div className="mt-1 space-y-1 pl-10">
+                    <div
+                      id={`group-${item.path}`}
+                      className="mt-1 space-y-1 pl-10">
                       {item.children.map((child) => {
                         const childActive = isActive(child.path);
                         return (
@@ -569,12 +538,13 @@ const NavigationSidebar = (props) => {
                             className={[
                               "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
                               childActive
-                                ? "bg-blue-50 text-blue-700"
+                                ? "bg-blue-600/10 text-blue-700"
                                 : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
                             ].join(" ")}>
+                            {/* child icon bigger than before */}
                             <Icon
                               name={child.icon}
-                              size={16}
+                              size={18}
                               className={
                                 childActive ? "text-blue-700" : "text-gray-500"
                               }
@@ -598,9 +568,11 @@ const NavigationSidebar = (props) => {
         </div>
       </aside>
 
-      {/* Mobile bottom nav (quick access to most-used areas) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white lg:hidden">
-        <div className="flex items-center justify-around py-2">
+      {/* Mobile bottom nav */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="mx-auto flex max-w-screen-sm items-center justify-around py-2">
           {[
             { path: "/dashboard", label: "Home", icon: "LayoutDashboard" },
             {
@@ -635,11 +607,15 @@ const NavigationSidebar = (props) => {
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  className={`flex flex-col items-center gap-1 rounded-lg px-3 py-2 transition-colors ${
+                  className={`flex flex-col items-center gap-1 rounded-lg px-2 py-2 transition-colors ${
                     active ? "text-blue-600" : "text-gray-500 hover:bg-gray-100"
-                  }`}>
-                  <Icon name={item.icon} size={20} />
-                  <span className="text-xs font-medium">{item.label}</span>
+                  }`}
+                  aria-current={active ? "page" : undefined}>
+                  {/* larger mobile icons for tap targets */}
+                  <Icon name={item.icon} size={24} />
+                  <span className="text-[11px] sm:text-xs font-medium">
+                    {item.label}
+                  </span>
                 </button>
               );
             })}

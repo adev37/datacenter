@@ -1,6 +1,13 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useEffect as useEffectHook,
+} from "react";
 import { useParams, Link } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { createPortal } from "react-dom";
 import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/AppIcon";
@@ -17,6 +24,8 @@ import {
 import { fullName, calcAge } from "@/utils/patient";
 import { API_BASE, toAbsUrl } from "@/services/baseApi";
 
+/* ----------------------- Small helpers ----------------------- */
+
 const Row = ({ label, value }) => (
   <div className="flex items-center justify-between py-2">
     <span className="text-sm text-text-secondary">{label}</span>
@@ -25,6 +34,53 @@ const Row = ({ label, value }) => (
     </span>
   </div>
 );
+
+/* ----------------------- Reusable Modal ----------------------- */
+
+function Modal({ open, onClose, title, children, footer }) {
+  // Close on ESC
+  useEffectHook(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      {/* Card */}
+      <div className="relative z-[61] w-full max-w-lg rounded-2xl border bg-card shadow-healthcare">
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <h3 className="text-lg font-semibold text-text-primary">{title}</h3>
+          <button
+            className="rounded-md p-1 hover:bg-muted"
+            onClick={onClose}
+            aria-label="Close">
+            <Icon name="X" size={18} />
+          </button>
+        </div>
+        <div className="px-5 py-4">{children}</div>
+        <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
+          {footer}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ----------------------- Main Component ----------------------- */
 
 export default function PatientProfile() {
   const { id } = useParams();
@@ -52,8 +108,8 @@ export default function PatientProfile() {
   const [setStatus, { isLoading: settingStat }] = useSetPatientStatusMutation();
   const [uploadPhoto, { isLoading: uploadingPh }] =
     useUploadPatientPhotoMutation();
-  const [addNote, { isLoading: addingNote }] = useAddPatientNoteMutation();
 
+  const [addNote, { isLoading: addingNote }] = useAddPatientNoteMutation();
   const {
     data: notesData,
     isFetching: notesFetching,
@@ -68,6 +124,38 @@ export default function PatientProfile() {
   }, [patient]);
 
   const fileRef = useRef(null);
+
+  /* ---------- Add Note modal state ---------- */
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteErr, setNoteErr] = useState("");
+
+  const openNote = () => {
+    setNoteText("");
+    setNoteErr("");
+    setNoteOpen(true);
+  };
+
+  const saveNote = async () => {
+    const text = noteText.trim();
+    if (!text) {
+      setNoteErr("Please enter a note.");
+      return;
+    }
+    try {
+      await addNote({ id: pid, text }).unwrap();
+      setNoteOpen(false); // close immediately after success
+      setNoteText("");
+      await refetchNotes(); // refresh notes list
+    } catch (e) {
+      setNoteErr("Failed to add note. Try again.");
+      // (Optional) console for devs
+      // eslint-disable-next-line no-console
+      console.error(e);
+    }
+  };
+
+  /* ---------- Loading / error states ---------- */
 
   if (isLoading) {
     return (
@@ -100,7 +188,8 @@ export default function PatientProfile() {
   const displayName = fullName(patient);
   const isInactive = String(patient.status).toLowerCase() !== "active";
 
-  // PRINT (no popup)
+  /* ----------------------- Actions ----------------------- */
+
   const handlePrint = async () => {
     try {
       const res = await fetch(`${API_BASE}/patients/${pid}/print`, {
@@ -149,19 +238,20 @@ export default function PatientProfile() {
         }
       };
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error(e);
       alert("Failed to render print view.");
     }
   };
 
-  // Actions
   const handleDeactivate = async () => {
     if (!window.confirm("Deactivate this patient?")) return;
     try {
-      await deactivate(pid).unwrap(); // sets status: "inactive"
+      await deactivate(pid).unwrap();
       await refetch();
       alert("Patient deactivated.");
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error(e);
       alert("Operation failed.");
     }
@@ -170,27 +260,16 @@ export default function PatientProfile() {
   const handleReactivate = async () => {
     try {
       if (patient.isDeleted) {
-        await restore(pid).unwrap(); // legacy: bring back from isDeleted
+        await restore(pid).unwrap();
       } else {
-        await setStatus({ id: pid, status: "active" }).unwrap(); // simple activate
+        await setStatus({ id: pid, status: "active" }).unwrap();
       }
       await refetch();
       alert("Patient reactivated.");
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error(e);
       alert("Operation failed.");
-    }
-  };
-
-  const handleAddNote = async () => {
-    const text = window.prompt("Enter a note about this patient:");
-    if (!text || !text.trim()) return;
-    try {
-      await addNote({ id: pid, text: text.trim() }).unwrap();
-      await refetchNotes();
-    } catch (e) {
-      console.error(e);
-      alert("Failed to add note.");
     }
   };
 
@@ -206,12 +285,15 @@ export default function PatientProfile() {
       await uploadPhoto({ id: pid, file }).unwrap();
       await refetch();
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error(err);
       alert("Photo upload failed.");
     } finally {
       e.target.value = "";
     }
   };
+
+  /* ----------------------- Render ----------------------- */
 
   return (
     <>
@@ -269,7 +351,7 @@ export default function PatientProfile() {
                   <>
                     <span>•</span>
                     <span className="flex items-center">
-                      <Icon name="Phone" size={14} className="mr-1" />
+                      <Icon name="Phone" size={14} className="mr-1" />{" "}
                       {patient.phone}
                     </span>
                   </>
@@ -278,7 +360,7 @@ export default function PatientProfile() {
                   <>
                     <span>•</span>
                     <span className="flex items-center">
-                      <Icon name="Mail" size={14} className="mr-1" />
+                      <Icon name="Mail" size={14} className="mr-1" />{" "}
                       {patient.email}
                     </span>
                   </>
@@ -310,10 +392,9 @@ export default function PatientProfile() {
               <Icon name="Calendar" size={16} className="mr-2" /> New
               Appointment
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleAddNote}
-              loading={addingNote}>
+
+            {/* OPEN THE MODAL INSTEAD OF window.prompt */}
+            <Button variant="outline" onClick={openNote} loading={addingNote}>
               <Icon name="FileText" size={16} className="mr-2" /> Add Note
             </Button>
 
@@ -334,6 +415,7 @@ export default function PatientProfile() {
           </div>
         </div>
       </div>
+
       {/* Main grid */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2 space-y-6">
@@ -427,17 +509,49 @@ export default function PatientProfile() {
               </ul>
             )}
             <div className="mt-3">
-              <Button
-                variant="outline"
-                onClick={handleAddNote}
-                loading={addingNote}>
-                <Icon name="Plus" size={14} className="mr-1" />
-                Add Note
+              <Button variant="outline" onClick={openNote} loading={addingNote}>
+                <Icon name="Plus" size={14} className="mr-1" /> Add Note
               </Button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ----------------------- Add Note Modal ----------------------- */}
+      <Modal
+        open={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        title="Add Note"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setNoteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveNote}
+              loading={addingNote}
+              disabled={!noteText.trim()}>
+              <Icon name="Save" size={16} className="mr-2" /> Save Note
+            </Button>
+          </>
+        }>
+        <label
+          className="mb-2 block text-sm font-medium text-text-primary"
+          htmlFor="note-text">
+          Note
+        </label>
+        <textarea
+          id="note-text"
+          className="min-h-[120px] w-full resize-y rounded-md border px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/30"
+          placeholder="Enter a note about this patient…"
+          value={noteText}
+          onChange={(e) => {
+            setNoteText(e.target.value);
+            setNoteErr("");
+          }}
+        />
+        {noteErr && <div className="mt-2 text-sm text-error">{noteErr}</div>}
+      </Modal>
     </>
   );
 }
