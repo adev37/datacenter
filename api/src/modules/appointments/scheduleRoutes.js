@@ -4,44 +4,38 @@ import { requireAuth } from "#middlewares/requireAuth.js";
 import { permit } from "#middlewares/rbac.js";
 import { PERMS } from "#permissions";
 import { validate as v } from "#middlewares/validate.js";
-import * as ctrl from "./appointmentController.js";
+import * as ctrl from "./scheduleController.js";
 
 import {
-  listAppointmentsSchema,
-  createAppointmentSchema,
-  updateAppointmentSchema,
-  setStatusSchema,
+  getScheduleSchema,
+  upsertTemplateSchema,
+  createBlockSchema,
 } from "./schemas.js";
 
 const r = Router();
 r.use(requireAuth);
 
+// read availability
 r.get(
   "/",
   permit(PERMS.APPOINTMENT_READ),
-  v(listAppointmentsSchema),
-  ctrl.list
+  v(getScheduleSchema),
+  ctrl.getSchedule
+);
+
+// manage templates and ad-hoc blocks
+r.post(
+  "/templates",
+  permit(PERMS.APPOINTMENT_WRITE),
+  v(upsertTemplateSchema),
+  ctrl.upsertTemplate
 );
 
 r.post(
-  "/",
+  "/blocks",
   permit(PERMS.APPOINTMENT_WRITE),
-  v(createAppointmentSchema),
-  ctrl.create
-);
-
-r.patch(
-  "/:id",
-  permit(PERMS.APPOINTMENT_WRITE),
-  v(updateAppointmentSchema),
-  ctrl.update
-);
-
-r.post(
-  "/:id/status",
-  permit(PERMS.APPOINTMENT_WRITE),
-  v(setStatusSchema),
-  ctrl.setStatus
+  v(createBlockSchema),
+  ctrl.createBlock
 );
 
 export default r;

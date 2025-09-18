@@ -55,6 +55,8 @@ export const api = createApi({
     "Encounter",
     "Audit",
     "Notification",
+    "Appointment",
+    "Schedule",
   ],
   endpoints: () => ({}),
 });

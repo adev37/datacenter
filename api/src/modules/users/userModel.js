@@ -20,6 +20,8 @@ const UserSchema = new mongoose.Schema(
       },
     },
     name: { type: String },
+    department: { type: String, trim: true },
+    registrationNo: { type: String, trim: true }, // medical license, if you use it
 
     // Normalize empty -> undefined so it won't hit the unique index
     phone: {

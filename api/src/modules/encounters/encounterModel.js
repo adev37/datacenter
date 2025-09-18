@@ -1,3 +1,4 @@
+// api/src/modules/encounters/encounterModel.js
 // ESM
 import mongoose from "mongoose";
 const { Schema } = mongoose;
@@ -27,12 +28,7 @@ const VitalsSchema = new Schema(
 
 const EncounterSchema = new Schema(
   {
-    branchId: {
-      type: Schema.Types.ObjectId,
-      ref: "Branch",
-      required: true,
-      index: true,
-    },
+    branchId: { type: String, required: true, index: true }, // ✅ string, matches rest of app
     patientId: {
       type: Schema.Types.ObjectId,
       ref: "Patient",
@@ -48,8 +44,8 @@ const EncounterSchema = new Schema(
     type: { type: String, trim: true, default: "outpatient" },
     soap: { type: SoapSchema, default: {} },
     vitals: { type: VitalsSchema, default: {} },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
-    updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    createdBy: { type: String }, // req.user.sub
+    updatedBy: { type: String },
   },
   { timestamps: true, collection: "encounters" }
 );

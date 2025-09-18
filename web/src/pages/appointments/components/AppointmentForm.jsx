@@ -29,9 +29,7 @@ const AppointmentForm = ({
   const [isSearching, setIsSearching] = useState(false);
   const [showNewPatient, setShowNewPatient] = useState(false);
 
-  const mockPatients = [
-    /* keep as-is */
-  ];
+  const mockPatients = []; // keep as-is / later swap to real patient search
 
   const appointmentTypeOptions = [
     { value: "consultation", label: "Consultation" },
@@ -42,7 +40,6 @@ const AppointmentForm = ({
     { value: "checkup", label: "Regular Checkup" },
     { value: "vaccination", label: "Vaccination" },
   ];
-
   const durationOptions = [
     { value: "15", label: "15 minutes" },
     { value: "30", label: "30 minutes" },
@@ -51,7 +48,6 @@ const AppointmentForm = ({
     { value: "90", label: "1.5 hours" },
     { value: "120", label: "2 hours" },
   ];
-
   const priorityOptions = [
     { value: "low", label: "Low Priority" },
     { value: "normal", label: "Normal Priority" },
@@ -59,7 +55,6 @@ const AppointmentForm = ({
     { value: "urgent", label: "Urgent" },
     { value: "emergency", label: "Emergency" },
   ];
-
   const insuranceOptions = [
     { value: "", label: "No Insurance" },
     { value: "blue-cross", label: "Blue Cross Blue Shield" },
@@ -72,9 +67,20 @@ const AppointmentForm = ({
 
   useEffect(() => {
     if (editingAppointment) {
+      // normalize fields from backend doc
       setFormData({
-        ...editingAppointment,
-        duration: editingAppointment?.duration?.toString() || "30",
+        patientId: editingAppointment.patientId || "",
+        patientName: editingAppointment.patient?.name || "",
+        patientPhone: editingAppointment.patient?.phone || "",
+        patientEmail: editingAppointment.patient?.email || "",
+        appointmentType: editingAppointment.type || "consultation",
+        duration: String(editingAppointment.durationMin || 30),
+        priority: editingAppointment.priority || "normal",
+        notes: editingAppointment.notes || "",
+        symptoms: editingAppointment.symptoms || "",
+        referredBy: editingAppointment.referredBy || "",
+        insuranceProvider: editingAppointment.insuranceProvider || "",
+        copayAmount: editingAppointment.copayAmount ?? "",
       });
     }
   }, [editingAppointment]);
@@ -97,28 +103,21 @@ const AppointmentForm = ({
     }
   };
 
-  const selectPatient = (patient) => {
+  const selectPatient = (p) => {
     setFormData((prev) => ({
       ...prev,
-      patientId: patient.id,
-      patientName: patient.name,
-      patientPhone: patient.phone,
-      patientEmail: patient.email,
+      patientId: p.id,
+      patientName: p.name,
+      patientPhone: p.phone,
+      patientEmail: p.email,
     }));
     setSearchResults([]);
   };
 
-  const generateTokenNumber = () => {
-    const dept = (
-      selectedSlot?.doctor?.department?.substring(0, 3) || "GEN"
-    ).toUpperCase();
-    const num = Math.floor(Math.random() * 999) + 1;
-    return `${dept}${num.toString().padStart(3, "0")}`;
-  };
-
   const calculateEstimatedTime = () => {
-    if (!selectedSlot) return "";
-    const [h, m] = selectedSlot.time.split(":");
+    const t = editingAppointment?.time || selectedSlot?.time;
+    if (!t) return "";
+    const [h, m] = t.split(":");
     const dt = new Date();
     dt.setHours(parseInt(h), parseInt(m), 0, 0);
     return dt.toLocaleTimeString("en-US", {
@@ -130,16 +129,31 @@ const AppointmentForm = ({
 
   const handleSubmit = (e) => {
     e?.preventDefault();
-    const appointmentData = {
-      ...formData,
-      ...selectedSlot,
-      id: editingAppointment?.id || `APT${Date.now()}`,
-      status: editingAppointment?.status || "scheduled",
-      tokenNumber: editingAppointment?.tokenNumber || generateTokenNumber(),
-      createdAt: editingAppointment?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+
+    // Build backend payload
+    const payload = {
+      date: editingAppointment?.date || selectedSlot?.date,
+      time: editingAppointment?.time || selectedSlot?.time,
+      durationMin: Number(formData.duration || 30),
+      type: formData.appointmentType,
+      priority: formData.priority,
+      doctorId: editingAppointment?.doctorId || selectedSlot?.doctorId, // required
+      doctor: editingAppointment?.doctor || selectedSlot?.doctor || {}, // optional snapshot
+      patientId: formData.patientId || undefined,
+      patient: {
+        name: formData.patientName,
+        phone: formData.patientPhone,
+        email: formData.patientEmail,
+      },
+      notes: formData.notes,
+      symptoms: formData.symptoms,
+      referredBy: formData.referredBy,
+      insuranceProvider: formData.insuranceProvider,
+      copayAmount:
+        formData.copayAmount !== "" ? Number(formData.copayAmount) : undefined,
     };
-    onSave(appointmentData);
+
+    onSave(payload);
   };
 
   if (!selectedSlot && !editingAppointment) {
@@ -162,7 +176,6 @@ const AppointmentForm = ({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* sticky header */}
       <div className="sticky top-0 z-10 border-b bg-card/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -180,22 +193,25 @@ const AppointmentForm = ({
           <div className="mb-1 flex items-center gap-2">
             <Icon name="Clock" size={16} className="text-primary" />
             <span className="font-medium">
-              {selectedSlot?.date || editingAppointment?.date} at{" "}
+              {(editingAppointment?.date || selectedSlot?.date) ?? ""} at{" "}
               {calculateEstimatedTime()}
             </span>
           </div>
           <div className="flex items-center gap-2 text-sm text-text-secondary">
             <Icon name="User" size={16} />
             <span>
-              {selectedSlot?.doctor?.name || editingAppointment?.doctor?.name} •{" "}
-              {selectedSlot?.doctor?.department ||
-                editingAppointment?.doctor?.department}
+              {editingAppointment?.doctor?.name ||
+                selectedSlot?.doctor?.name ||
+                "Doctor"}{" "}
+              •{" "}
+              {editingAppointment?.doctor?.department ||
+                selectedSlot?.doctor?.department ||
+                "Department"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* scrollable form */}
       <div className="flex-1 overflow-auto px-4 py-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center justify-between">
@@ -339,7 +355,6 @@ const AppointmentForm = ({
         </form>
       </div>
 
-      {/* sticky footer actions */}
       <div className="sticky bottom-0 z-10 border-t bg-card/95 px-4 py-3 backdrop-blur">
         <div className="flex gap-2">
           <Button

@@ -208,5 +208,91 @@ r.put(
     }
   }
 );
+/**
+ * GET /api/v1/users/stats
+ * Returns counts per role.
+ * - SUPER_ADMIN: across all branches
+ * - Others: only within current X-Branch-Id
+ */
+r.get(
+  "/stats",
+  requireAuth,
+  permit(PERMS.USER_READ),
+  async (req, res, next) => {
+    try {
+      const requester = await User.findById(req.user.sub)
+        .select("roles")
+        .lean();
+      const isSuper = (requester?.roles || []).includes("SUPER_ADMIN");
 
+      const match = {};
+      if (!isSuper) {
+        const branchId = String(req.ctx?.branchId || "");
+        if (!branchId)
+          return res.status(400).json({ message: "X-Branch-Id required" });
+        match.branches = branchId;
+      }
+
+      const pipeline = [
+        { $match: match },
+        { $unwind: "$roles" },
+        { $group: { _id: "$roles", count: { $sum: 1 } } },
+        { $project: { role: "$_id", count: 1, _id: 0 } },
+        { $sort: { role: 1 } },
+      ];
+
+      const data = await User.aggregate(pipeline);
+      const counts = data.reduce((acc, { role, count }) => {
+        acc[role] = count;
+        return acc;
+      }, {});
+      res.json({ counts });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/users/by-role/:role
+ * Returns the list of users in a single role.
+ * - SUPER_ADMIN: across all branches
+ * - Others: only within current X-Branch-Id
+ */
+r.get(
+  "/by-role/:role",
+  requireAuth,
+  permit(PERMS.USER_READ),
+  async (req, res, next) => {
+    try {
+      const role = String(req.params.role || "").toUpperCase();
+      if (!role) return res.status(400).json({ message: "role is required" });
+
+      const requester = await User.findById(req.user.sub)
+        .select("roles")
+        .lean();
+      const isSuper = (requester?.roles || []).includes("SUPER_ADMIN");
+
+      const q = { roles: role };
+      if (!isSuper) {
+        const branchId = String(req.ctx?.branchId || "");
+        if (!branchId)
+          return res.status(400).json({ message: "X-Branch-Id required" });
+        q.branches = branchId;
+      }
+
+      const users = await User.find(q)
+        .select(
+          "email firstName lastName title profession roles branches createdAt"
+        )
+        .collation({ locale: "en", strength: 2 })
+        .sort({ lastName: 1, firstName: 1, email: 1 })
+        .lean();
+
+      res.json(users);
+    } catch (e) {
+      next(e);
+    }
+  }
+);
 export default r;

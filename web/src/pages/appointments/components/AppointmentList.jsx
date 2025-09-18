@@ -8,9 +8,16 @@ const AppointmentList = ({
   onCancel,
   onComplete,
   filters,
+  loading,
 }) => {
   const [sortBy, setSortBy] = useState("time");
   const [sortOrder, setSortOrder] = useState("asc");
+
+  const get = (obj, path, fallback = "") =>
+    path
+      .split(".")
+      .reduce((o, k) => (o && o[k] != null ? o[k] : undefined), obj) ??
+    fallback;
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -31,97 +38,82 @@ const AppointmentList = ({
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "emergency":
-        return "text-red-600";
-      case "urgent":
-        return "text-orange-600";
-      case "high":
-        return "text-yellow-600";
-      case "normal":
-        return "text-green-600";
-      case "low":
-        return "text-gray-600";
-      default:
-        return "text-gray-600";
-    }
-  };
+  const getPriorityColor = (p) =>
+    ({
+      emergency: "text-red-600",
+      urgent: "text-orange-600",
+      high: "text-yellow-600",
+      normal: "text-green-600",
+      low: "text-gray-600",
+    }[p] || "text-gray-600");
 
-  const getPriorityIcon = (priority) => {
-    switch (priority) {
-      case "emergency":
-        return "AlertTriangle";
-      case "urgent":
-        return "AlertCircle";
-      case "high":
-        return "ArrowUp";
-      case "normal":
-        return "Minus";
-      case "low":
-        return "ArrowDown";
-      default:
-        return "Minus";
-    }
-  };
+  const getPriorityIcon = (p) =>
+    ({
+      emergency: "AlertTriangle",
+      urgent: "AlertCircle",
+      high: "ArrowUp",
+      normal: "Minus",
+      low: "ArrowDown",
+    }[p] || "Minus");
 
-  const filtered = appointments?.filter((a) => {
-    if (filters?.searchTerm) {
-      const q = filters.searchTerm.toLowerCase();
+  const filtered =
+    appointments?.filter((a) => {
+      const patientName = get(a, "patient.name") || a.patientName || "";
+      const patientPhone = get(a, "patient.phone") || a.patientPhone || "";
+      const token = a.tokenNumber || "";
+
+      if (filters?.searchTerm) {
+        const q = filters.searchTerm.toLowerCase();
+        if (
+          !patientName.toLowerCase().includes(q) &&
+          !patientPhone.includes(filters.searchTerm) &&
+          !token.toLowerCase().includes(q)
+        )
+          return false;
+      }
       if (
-        !a?.patientName?.toLowerCase().includes(q) &&
-        !a?.patientPhone?.includes(filters.searchTerm) &&
-        !a?.tokenNumber?.toLowerCase().includes(q)
+        filters?.department !== "all" &&
+        (get(a, "doctor.department") || a?.doctor?.department) !==
+          filters?.department
       )
         return false;
-    }
-    if (
-      filters?.department !== "all" &&
-      a?.doctor?.department !== filters?.department
-    )
-      return false;
-    if (filters?.doctor !== "all" && a?.doctorId !== filters?.doctor)
-      return false;
-    if (
-      filters?.appointmentType !== "all" &&
-      a?.appointmentType !== filters?.appointmentType
-    )
-      return false;
-    if (filters?.status !== "all" && a?.status !== filters?.status)
-      return false;
-    if (filters?.dateFrom && a?.date < filters?.dateFrom) return false;
-    if (filters?.dateTo && a?.date > filters?.dateTo) return false;
-    return true;
-  });
+      if (filters?.doctor !== "all" && a?.doctorId !== filters?.doctor)
+        return false;
+      if (
+        filters?.appointmentType !== "all" &&
+        (a?.type || a?.appointmentType) !== filters?.appointmentType
+      )
+        return false;
+      if (filters?.status !== "all" && a?.status !== filters?.status)
+        return false;
+      if (filters?.dateFrom && a?.date < filters?.dateFrom) return false;
+      if (filters?.dateTo && a?.date > filters?.dateTo) return false;
+      return true;
+    }) || [];
 
   const sorted = [...filtered].sort((a, b) => {
-    let A, B;
-    switch (sortBy) {
-      case "time":
-        A = `${a.date} ${a.time}`;
-        B = `${b.date} ${b.time}`;
-        break;
-      case "patient":
-        A = a.patientName;
-        B = b.patientName;
-        break;
-      case "doctor":
-        A = a?.doctor?.name || "";
-        B = b?.doctor?.name || "";
-        break;
-      case "status":
-        A = a.status;
-        B = b.status;
-        break;
-      case "priority":
-        const order = { emergency: 5, urgent: 4, high: 3, normal: 2, low: 1 };
-        A = order[a.priority] || 0;
-        B = order[b.priority] || 0;
-        break;
-      default:
-        A = a[sortBy];
-        B = b[sortBy];
-    }
+    const val = (rec, field) => {
+      switch (field) {
+        case "time":
+          return `${rec.date} ${rec.time}`;
+        case "patient":
+          return get(rec, "patient.name") || rec.patientName || "";
+        case "doctor":
+          return get(rec, "doctor.name") || "";
+        case "status":
+          return rec.status || "";
+        case "priority":
+          return (
+            { emergency: 5, urgent: 4, high: 3, normal: 2, low: 1 }[
+              rec.priority
+            ] || 0
+          );
+        default:
+          return rec[field];
+      }
+    };
+    const A = val(a, sortBy);
+    const B = val(b, sortBy);
     if (A < B) return sortOrder === "asc" ? -1 : 1;
     if (A > B) return sortOrder === "asc" ? 1 : -1;
     return 0;
@@ -136,7 +128,7 @@ const AppointmentList = ({
   };
 
   const formatTime = (t) => {
-    const [h, m] = t.split(":");
+    const [h, m] = String(t || "00:00").split(":");
     const d = new Date();
     d.setHours(parseInt(h), parseInt(m));
     return d.toLocaleTimeString("en-US", {
@@ -159,7 +151,7 @@ const AppointmentList = ({
           <div className="flex items-center space-x-2">
             <Icon name="List" size={20} className="text-primary" />
             <h3 className="font-semibold text-text-primary">
-              Appointments ({sorted.length})
+              {loading ? "Loading…" : `Appointments (${sorted.length})`}
             </h3>
           </div>
           <div className="flex items-center space-x-2">
@@ -193,7 +185,6 @@ const AppointmentList = ({
         </div>
       </div>
 
-      {/* CHANGE: removed max-h-96/overflow-auto to avoid nested scrolling in List view */}
       <div className="divide-y divide-border">
         {sorted.length === 0 ? (
           <div className="p-8 text-center">
@@ -206,140 +197,147 @@ const AppointmentList = ({
               No Appointments Found
             </h4>
             <p className="text-text-secondary">
-              No appointments match your current filters. Try adjusting your
-              search criteria.
+              No appointments match your current filters.
             </p>
           </div>
         ) : (
-          sorted.map((a) => (
-            <div
-              key={a.id}
-              className="p-4 hover:bg-muted healthcare-transition">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary-foreground">
-                        {a?.patientName
-                          ?.split(" ")
-                          ?.map((n) => n?.[0])
-                          ?.join("")}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-text-primary">
-                        {a.patientName}
-                      </h4>
-                      <p className="text-sm text-text-secondary">
-                        {a.patientPhone} • Token: {a.tokenNumber}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <div>
-                      <p className="text-xs text-text-secondary">Date & Time</p>
-                      <p className="text-sm font-medium text-text-primary">
-                        {formatDate(a.date)}
-                      </p>
-                      <p className="text-sm text-text-secondary">
-                        {formatTime(a.time)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-text-secondary">Doctor</p>
-                      <p className="text-sm font-medium text-text-primary">
-                        {a?.doctor?.name}
-                      </p>
-                      <p className="text-sm text-text-secondary">
-                        {a?.doctor?.department}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-text-secondary">Type</p>
-                      <p className="text-sm font-medium text-text-primary capitalize">
-                        {a.appointmentType}
-                      </p>
-                      <p className="text-sm text-text-secondary">
-                        {a.duration} min
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-text-secondary">Priority</p>
-                      <div className="flex items-center space-x-1">
-                        <Icon
-                          name={getPriorityIcon(a.priority)}
-                          size={14}
-                          className={getPriorityColor(a.priority)}
-                        />
-                        <span
-                          className={`text-sm font-medium capitalize ${getPriorityColor(
-                            a.priority
-                          )}`}>
-                          {a.priority}
+          sorted.map((a) => {
+            const id = a._id || a.id;
+            const pName = get(a, "patient.name") || a.patientName || "Patient";
+            const pPhone = get(a, "patient.phone") || a.patientPhone || "";
+            const docName = get(a, "doctor.name") || "";
+            const dept = get(a, "doctor.department") || "";
+            const duration = a.durationMin ?? a.duration ?? 30;
+            const type = a.type || a.appointmentType || "consultation";
+            return (
+              <div
+                key={id}
+                className="p-4 hover:bg-muted healthcare-transition">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium text-primary-foreground">
+                          {pName
+                            .split(" ")
+                            .map((n) => n?.[0])
+                            .join("")}
                         </span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-text-primary">
+                          {pName}
+                        </h4>
+                        <p className="text-sm text-text-secondary">
+                          {pPhone}{" "}
+                          {a.tokenNumber ? `• Token: ${a.tokenNumber}` : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                      <div>
+                        <p className="text-xs text-text-secondary">
+                          Date & Time
+                        </p>
+                        <p className="text-sm font-medium text-text-primary">
+                          {formatDate(a.date)}
+                        </p>
+                        <p className="text-sm text-text-secondary">
+                          {formatTime(a.time)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-text-secondary">Doctor</p>
+                        <p className="text-sm font-medium text-text-primary">
+                          {docName}
+                        </p>
+                        <p className="text-sm text-text-secondary">{dept}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-text-secondary">Type</p>
+                        <p className="text-sm font-medium text-text-primary capitalize">
+                          {type}
+                        </p>
+                        <p className="text-sm text-text-secondary">
+                          {duration} min
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-text-secondary">Priority</p>
+                        <div className="flex items-center space-x-1">
+                          <Icon
+                            name={getPriorityIcon(a.priority)}
+                            size={14}
+                            className={getPriorityColor(a.priority)}
+                          />
+                          <span
+                            className={`text-sm font-medium capitalize ${getPriorityColor(
+                              a.priority
+                            )}`}>
+                            {a.priority}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(
+                            a.status
+                          )}`}>
+                          {a.status?.replace("-", " ").toUpperCase()}
+                        </span>
+                        {a.symptoms && (
+                          <span className="text-sm text-text-secondary truncate max-w-xs">
+                            {a.symptoms}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(
-                          a.status
-                        )}`}>
-                        {a.status.replace("-", " ").toUpperCase()}
-                      </span>
-                      {a.symptoms && (
-                        <span className="text-sm text-text-secondary truncate max-w-xs">
-                          {a.symptoms}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2 ml-4">
-                  {a.status === "scheduled" && (
-                    <>
+                  <div className="flex items-center space-x-2 ml-4">
+                    {a.status === "scheduled" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onEdit(a)}>
+                          <Icon name="Edit" size={14} className="mr-1" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onComplete(a)}>
+                          <Icon name="Check" size={14} className="mr-1" /> Start
+                        </Button>
+                      </>
+                    )}
+                    {a.status === "in-progress" && (
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onEdit(a)}>
-                        <Icon name="Edit" size={14} className="mr-1" /> Edit
-                      </Button>
-                      <Button
-                        variant="outline"
+                        variant="success"
                         size="sm"
                         onClick={() => onComplete(a)}>
-                        <Icon name="Check" size={14} className="mr-1" /> Start
+                        <Icon name="CheckCircle" size={14} className="mr-1" />{" "}
+                        Complete
                       </Button>
-                    </>
-                  )}
-
-                  {a.status === "in-progress" && (
-                    <Button
-                      variant="success"
-                      size="sm"
-                      onClick={() => onComplete(a)}>
-                      <Icon name="CheckCircle" size={14} className="mr-1" />{" "}
-                      Complete
-                    </Button>
-                  )}
-
-                  {["scheduled", "confirmed"].includes(a.status) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onCancel(a)}
-                      className="text-error hover:text-error">
-                      <Icon name="X" size={14} className="mr-1" /> Cancel
-                    </Button>
-                  )}
+                    )}
+                    {["scheduled", "confirmed"].includes(a.status) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onCancel(a)}
+                        className="text-error hover:text-error">
+                        <Icon name="X" size={14} className="mr-1" /> Cancel
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

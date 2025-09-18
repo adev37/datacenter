@@ -62,16 +62,17 @@ const Notifications = React.lazy(() =>
     /* webpackChunkName: "notifications" */ "./pages/notifications/Notifications"
   )
 );
+
 // ---- Appointments ----------------------------------------------------------
 const AppointmentList = React.lazy(() =>
   import(
     /* webpackChunkName: "appointments-list" */ "./pages/appointments/AppointmentScheduling"
   )
 );
-// Optional Calendar page (keeps app from crashing if file doesn’t exist)
+// Use the actual component path in your repo (components/CalendarView.jsx)
 const CalendarView = React.lazy(() =>
   import(
-    /* webpackChunkName: "appointments-calendar" */ "./pages/appointments/Calendar.jsx"
+    /* webpackChunkName: "appointments-calendar" */ "./pages/appointments/components/CalendarView"
   ).catch(() => ({
     default: () => <div className="p-6">Calendar page not implemented.</div>,
   }))
@@ -252,8 +253,14 @@ const CreateUser = React.lazy(() =>
     /* webpackChunkName: "settings-create-user" */ "./pages/settings/CreateUser"
   )
 );
+const UserDirectory = React.lazy(() =>
+  import(
+    /* webpackChunkName: "settings-user-directory" */ "./pages/settings/UserDirectory"
+  )
+);
 import AuditLogs from "@/pages/settings/AuditLogs"; // (eager load; tiny page)
 
+//
 // =============================================================================
 
 export default function RoutesApp() {
@@ -341,6 +348,7 @@ export default function RoutesApp() {
               />
             }
           />
+
           {/* ------ Notifications ------ */}
           <Route
             path="notifications"
@@ -355,6 +363,7 @@ export default function RoutesApp() {
               />
             }
           />
+
           {/* ------ Appointments ------ */}
           <Route
             path="appointments"
@@ -783,6 +792,19 @@ export default function RoutesApp() {
           />
 
           {/* ------ Settings ------ */}
+          <Route
+            path="settings/user-directory"
+            element={
+              <PrivateRoute
+                requirePerm="settings.user"
+                element={
+                  <WithSuspense>
+                    <UserDirectory />
+                  </WithSuspense>
+                }
+              />
+            }
+          />
           <Route
             path="settings/profile"
             element={

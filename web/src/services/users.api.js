@@ -11,6 +11,14 @@ export const usersApi = api.injectEndpoints({
       query: (body) => ({ url: "/users/me", method: "PUT", body }),
       invalidatesTags: [{ type: "User", id: "ME" }],
     }),
+    getUserStats: build.query({
+      query: () => ({ url: "/users/stats" }),
+      providesTags: [{ type: "User", id: "STATS" }],
+    }),
+    listUsersByRole: build.query({
+      query: (role) => ({ url: `/users/by-role/${role}` }),
+      providesTags: (_r, _e, role) => [{ type: "User", id: `ROLE_${role}` }],
+    }),
     uploadMyAvatar: build.mutation({
       query: (file) => {
         const form = new FormData();
@@ -62,4 +70,6 @@ export const {
   useCreateUserMutation,
   useSetUserPermissionsMutation,
   useGetUserPermissionsQuery,
+  useGetUserStatsQuery, // 👈 new
+  useListUsersByRoleQuery, // 👈 new
 } = usersApi;

@@ -23,6 +23,10 @@ import { getMe } from "#modules/users/me.controller.js";
 import patientRoutes from "#modules/patients/patientRoutes.js";
 import patientEncounterRoutes from "#modules/encounters/patientEncounterRoutes.js";
 import notificationRoutes from "#modules/notifications/notificationRoutes.js";
+
+import appointmentRoutes from "#modules/appointments/appointmentRoutes.js";
+import scheduleRoutes from "#modules/appointments/scheduleRoutes.js";
+
 const {
   API_CORS_ORIGINS = "",
   NODE_ENV = "development",
@@ -75,6 +79,8 @@ app.use("/api/v1/patients", patientRoutes);
 app.use("/api/v1/patients/:patientId/encounters", patientEncounterRoutes);
 app.use("/api/v1/audits", auditRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/appointments", appointmentRoutes);
+app.use("/api/v1/schedules", scheduleRoutes);
 
 // Serve avatars/static uploads
 app.use(

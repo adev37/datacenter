@@ -1,22 +1,53 @@
-import React, { useState, useEffect } from "react";
-import NavigationBreadcrumb from "@/components/ui/NavigationBreadcrumb";
-import AppointmentFilters from "./components/AppointmentFilters";
-import CalendarView from "./components/CalendarView";
-import AppointmentForm from "./components/AppointmentForm";
-import AppointmentList from "./components/AppointmentList";
-import QuickStats from "./components/QuickStats";
+// apps/web/src/pages/appointments/AppointmentScheduling.jsx
+import React, { useMemo, useState } from "react";
+import { skipToken } from "@reduxjs/toolkit/query";
+import { useSelector } from "react-redux";
 import Icon from "@/components/AppIcon";
 import Button from "@/components/ui/Button";
 
-const AppointmentScheduling = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+// components already in your repo
+import AppointmentFilters from "./components/AppointmentFilters";
+import AppointmentList from "./components/AppointmentList";
+import CalendarView from "./components/CalendarView";
+import QuickStats from "./components/QuickStats";
+
+// RTK Query
+import {
+  useGetScheduleQuery,
+  useListAppointmentsQuery,
+  useCreateAppointmentMutation,
+  useSetAppointmentStatusMutation,
+  useUpdateAppointmentMutation,
+  useUpsertTemplateMutation,
+  useCreateBlockMutation,
+} from "@/services/appointments.api";
+
+// small helpers
+const iso = (d) => new Date(d).toISOString().slice(0, 10);
+const startOfWeek = (d) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+};
+const endOfWeek = (d) => {
+  const x = startOfWeek(d);
+  x.setDate(x.getDate() + 6);
+  return x;
+};
+
+export default function AppointmentScheduling() {
+  // UI state
+  const [mode, setMode] = useState("calendar"); // 'calendar' | 'list'
+  const [selectedDoctorId, setSelectedDoctorId] = useState(""); // hook to your doctor picker
+  const [weekCursor, setWeekCursor] = useState(new Date()); // calendar window
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [editingAppointment, setEditingAppointment] = useState(null);
-  const [viewMode, setViewMode] = useState("calendar"); // 'calendar' | 'list'
-  const [appointments, setAppointments] = useState([]);
+  const [editing, setEditing] = useState(null);
+
+  // left-panel filters (keep your component-controlled object)
   const [filters, setFilters] = useState({
-    dateFrom: new Date().toISOString().split("T")[0],
-    dateTo: "",
+    dateFrom: iso(new Date()),
+    dateTo: iso(new Date()),
     department: "all",
     doctor: "all",
     appointmentType: "all",
@@ -24,178 +55,206 @@ const AppointmentScheduling = () => {
     searchTerm: "",
   });
 
-  // demo data
-  const mockAppointments = [
-    /* ... keep your mock array exactly as-is ... */
-  ];
+  // ---- Build query params --------------------------------------------------
+  const schedFrom = iso(startOfWeek(weekCursor));
+  const schedTo = iso(endOfWeek(weekCursor));
 
-  useEffect(() => {
-    const saved = localStorage.getItem("appointments");
-    if (saved) setAppointments(JSON.parse(saved));
-    else {
-      setAppointments(mockAppointments);
-      localStorage.setItem("appointments", JSON.stringify(mockAppointments));
+  const scheduleParams =
+    selectedDoctorId && schedFrom && schedTo
+      ? { doctorId: selectedDoctorId, from: schedFrom, to: schedTo }
+      : null;
+
+  const listParams = useMemo(() => {
+    const p = {};
+    if (filters.dateFrom) p.dateFrom = filters.dateFrom;
+    if (filters.dateTo) p.dateTo = filters.dateTo;
+    if (filters.status && filters.status !== "all") p.status = filters.status;
+    if (filters.doctor && filters.doctor !== "all") p.doctorId = filters.doctor;
+    if (filters.department && filters.department !== "all")
+      p.department = filters.department;
+    if (filters.searchTerm) p.q = filters.searchTerm;
+    return Object.keys(p).length ? p : null;
+  }, [filters]);
+
+  // ---- Queries -------------------------------------------------------------
+  const {
+    data: scheduleData,
+    isFetching: isScheduleLoading,
+    error: scheduleError,
+  } = useGetScheduleQuery(scheduleParams ?? skipToken);
+
+  const {
+    data: listRes,
+    isFetching: isListLoading,
+    error: listError,
+  } = useListAppointmentsQuery(listParams ?? skipToken);
+
+  const appointments = listRes?.items ?? [];
+
+  // ---- Mutations -----------------------------------------------------------
+  const [createAppointment, { isLoading: isCreating }] =
+    useCreateAppointmentMutation();
+  const [setStatus] = useSetAppointmentStatusMutation();
+  const [updateAppointment] = useUpdateAppointmentMutation();
+  const [upsertTemplate] = useUpsertTemplateMutation();
+  const [createBlock] = useCreateBlockMutation();
+
+  // ---- Handlers ------------------------------------------------------------
+  const onSlotSelect = (slot) => {
+    setSelectedSlot(slot); // {doctorId,date,time,doctor}
+    setEditing(null);
+  };
+
+  const onSaveAppointment = async (payload) => {
+    // convert your AppointmentForm payload -> API shape
+    const body = {
+      date: payload.date,
+      time: payload.time,
+      durationMin: Number(payload.duration || 30),
+      type: payload.appointmentType || "consultation",
+      priority: payload.priority || "normal",
+      doctorId: payload.doctorId,
+      doctor: payload.doctor, // {name, department}
+      // choose either patientId or snapshot (your form uses snapshot)
+      patient: {
+        name: payload.patientName,
+        phone: payload.patientPhone,
+        email: payload.patientEmail,
+      },
+      notes: payload.notes,
+      symptoms: payload.symptoms,
+      referredBy: payload.referredBy,
+      insuranceProvider: payload.insuranceProvider,
+      copayAmount: payload.copayAmount
+        ? Number(payload.copayAmount)
+        : undefined,
+    };
+
+    try {
+      await createAppointment(body).unwrap();
+      setSelectedSlot(null);
+    } catch (e) {
+      const msg =
+        e?.data?.message ||
+        (e?.status === 409 ? "Time slot already booked" : "Failed to save");
+      // replace with your toast helper
+      alert(msg);
     }
-  }, []);
-
-  const handleSlotSelect = (slot) => {
-    setSelectedSlot(slot);
-    setEditingAppointment(null);
   };
 
-  const handleSaveAppointment = (appointmentData) => {
-    const next = editingAppointment
-      ? appointments.map((a) =>
-          a.id === editingAppointment.id ? appointmentData : a
-        )
-      : [...appointments, appointmentData];
-    setAppointments(next);
-    localStorage.setItem("appointments", JSON.stringify(next));
-    setSelectedSlot(null);
-    setEditingAppointment(null);
+  const onStartOrComplete = async (apt) => {
+    const next = apt.status === "scheduled" ? "in-progress" : "completed";
+    try {
+      await setStatus({ id: apt._id, status: next }).unwrap();
+    } catch (e) {
+      alert(e?.data?.message || "Failed to update status");
+    }
   };
 
-  const handleEditAppointment = (apt) => {
-    setEditingAppointment(apt);
-    setSelectedSlot(null);
+  const onCancelAppointment = async (apt) => {
+    try {
+      await setStatus({ id: apt._id, status: "cancelled" }).unwrap();
+    } catch (e) {
+      alert(e?.data?.message || "Failed to cancel");
+    }
   };
 
-  const handleCancelAppointment = (apt) => {
-    const next = appointments.map((a) =>
-      a.id === apt.id
-        ? { ...a, status: "cancelled", updatedAt: new Date().toISOString() }
-        : a
-    );
-    setAppointments(next);
-    localStorage.setItem("appointments", JSON.stringify(next));
-  };
-
-  const handleCompleteAppointment = (apt) => {
-    const newStatus = apt.status === "scheduled" ? "in-progress" : "completed";
-    const next = appointments.map((a) =>
-      a.id === apt.id
-        ? { ...a, status: newStatus, updatedAt: new Date().toISOString() }
-        : a
-    );
-    setAppointments(next);
-    localStorage.setItem("appointments", JSON.stringify(next));
-  };
-
-  // unified panel height so everything stays visible under the global header
-  const panelH = "h-[calc(100vh-220px)]";
-
+  // ---- Render --------------------------------------------------------------
   return (
-    <>
-      <NavigationBreadcrumb />
+    <div className="p-4">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Appointment Scheduling</h2>
+          <p className="text-sm text-text-secondary">
+            Manage patient appointments and doctor schedules
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant={mode === "calendar" ? "default" : "outline"}
+            onClick={() => setMode("calendar")}>
+            <Icon name="Calendar" className="mr-2" /> Calendar
+          </Button>
+          <Button
+            variant={mode === "list" ? "default" : "outline"}
+            onClick={() => setMode("list")}>
+            <Icon name="List" className="mr-2" /> List
+          </Button>
+        </div>
+      </div>
 
-      {/* Title card */}
-      <div className="rounded-xl border bg-card p-5 shadow-healthcare">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Appointment Scheduling</h1>
-            <p className="mt-1 text-sm text-gray-600">
-              Manage patient appointments and doctor schedules
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === "calendar" ? "default" : "outline"}
-              onClick={() => setViewMode("calendar")}>
-              <Icon name="Calendar" size={16} className="mr-2" />
-              Calendar
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "outline"}
-              onClick={() => setViewMode("list")}>
-              <Icon name="List" size={16} className="mr-2" />
-              List
-            </Button>
-            <Button>
-              <Icon name="Plus" size={16} className="mr-2" />
-              Quick Book
-            </Button>
+      {/* Quick stats from today’s list */}
+      <QuickStats appointments={appointments} />
+
+      <div className="grid grid-cols-12 gap-4">
+        {/* Left: Filters */}
+        <div className="col-span-12 md:col-span-3">
+          <AppointmentFilters filters={filters} onFiltersChange={setFilters} />
+        </div>
+
+        {/* Middle: Calendar / List */}
+        <div className="col-span-12 md:col-span-6">
+          {mode === "calendar" ? (
+            <CalendarView
+              // your CalendarView already accepts these
+              selectedDate={weekCursor}
+              onDateChange={setWeekCursor}
+              onSlotSelect={onSlotSelect}
+              // pass booked appointments only if your view still needs them
+              appointments={appointments}
+              // you can also pass computed schedule if you’ve replaced local logic
+              schedule={scheduleData}
+              isLoading={isScheduleLoading}
+              error={scheduleError}
+              doctorId={selectedDoctorId}
+              onDoctorChange={setSelectedDoctorId}
+            />
+          ) : (
+            <AppointmentList
+              appointments={appointments}
+              filters={filters}
+              onEdit={setEditing}
+              onCancel={onCancelAppointment}
+              onComplete={onStartOrComplete}
+            />
+          )}
+        </div>
+
+        {/* Right: Form */}
+        <div className="col-span-12 md:col-span-3">
+          {/* Your AppointmentForm uses selectedSlot/editing and calls onSave */}
+          {/* Keep your existing component; only the onSave needs to call mutation */}
+          {/* Example: */}
+          {/* <AppointmentForm
+              selectedSlot={selectedSlot}
+              editingAppointment={editing}
+              onSave={onSaveAppointment}
+              onCancel={() => { setSelectedSlot(null); setEditing(null); }}
+            /> */}
+          <div className="border rounded-lg p-4 text-text-secondary">
+            Hook your <code>AppointmentForm</code> here and call{" "}
+            <code>onSaveAppointment</code>.
           </div>
         </div>
       </div>
 
-      <div className="mt-6">
-        <QuickStats appointments={appointments} />
-      </div>
-
-      {/* 3-column layout */}
-      <div className="mt-6 grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-        {/* Filters (left) */}
-        <section
-          className={`xl:col-span-3 rounded-xl border bg-card shadow-healthcare sticky top-6 ${panelH} overflow-hidden`}>
-          <AppointmentFilters filters={filters} onFiltersChange={setFilters} />
-        </section>
-
-        {/* Calendar / List (middle) – THIS OWNS VERTICAL SCROLL */}
-        <section
-          className={`xl:col-span-6 rounded-xl border bg-card shadow-healthcare ${panelH} overflow-auto`}>
-          <div className="flex h-full flex-col min-h-0">
-            <div className="px-4 py-3 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icon name="Calendar" size={18} className="text-primary" />
-                  <h3 className="font-semibold">Doctor Schedule</h3>
-                </div>
-                <div className="hidden md:flex items-center gap-4 text-xs text-text-secondary">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="inline-block h-3 w-3 rounded border border-green-300 bg-green-200" />
-                    Available
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="inline-block h-3 w-3 rounded border border-blue-300 bg-blue-200" />
-                    Booked
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="inline-block h-3 w-3 rounded border border-gray-300 bg-gray-200" />
-                    Blocked
-                  </span>
-                </div>
-              </div>
+      {(scheduleError || listError) && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {scheduleError && (
+            <div>
+              Schedule:{" "}
+              {scheduleError?.data?.message || "Error loading schedule"}
             </div>
-
-            <div className="flex-1 min-h-0">
-              {viewMode === "calendar" ? (
-                <CalendarView
-                  selectedDate={selectedDate}
-                  onDateChange={setSelectedDate}
-                  onSlotSelect={handleSlotSelect}
-                  appointments={appointments}
-                />
-              ) : (
-                <div className="p-4">
-                  <AppointmentList
-                    appointments={appointments}
-                    onEdit={handleEditAppointment}
-                    onCancel={handleCancelAppointment}
-                    onComplete={handleCompleteAppointment}
-                    filters={filters}
-                  />
-                </div>
-              )}
+          )}
+          {listError && (
+            <div>
+              Appointments:{" "}
+              {listError?.data?.message || "Error loading appointments"}
             </div>
-          </div>
-        </section>
-
-        {/* Book Appointment (right) */}
-        <aside
-          className={`xl:col-span-3 sticky top-6 rounded-xl border bg-card shadow-healthcare ${panelH} overflow-hidden`}>
-          <AppointmentForm
-            selectedSlot={selectedSlot}
-            editingAppointment={editingAppointment}
-            onSave={handleSaveAppointment}
-            onCancel={() => {
-              setSelectedSlot(null);
-              setEditingAppointment(null);
-            }}
-          />
-        </aside>
-      </div>
-    </>
+          )}
+        </div>
+      )}
+    </div>
   );
-};
-
-export default AppointmentScheduling;
+}
